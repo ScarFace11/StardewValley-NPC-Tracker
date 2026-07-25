@@ -274,7 +274,8 @@ namespace NpcTrackerMod
         {
             Game1.activeClickableMenu = new TrackingMenu(
                 Monitor, _state, _registry, _tileRenderer, _config,
-                () => Helper.WriteConfig(_config));
+                () => Helper.WriteConfig(_config),
+                Helper.Translation);
         }
 
         private void LogCurrentLocationWarps()

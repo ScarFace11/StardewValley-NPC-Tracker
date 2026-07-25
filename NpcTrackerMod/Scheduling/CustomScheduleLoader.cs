@@ -133,7 +133,7 @@ namespace NpcTrackerMod.Scheduling
                 if (root.TryGetValue("Changes", out var changesToken))
                     ProcessChanges(changesToken, filePath);
                 else
-                    AddScheduleEntries(root);
+                    AddScheduleEntries(root, filePath, 0);
             }
             catch (Exception ex)
             {
@@ -149,24 +149,61 @@ namespace NpcTrackerMod.Scheduling
                 return;
             }
 
+            int patchIdx = 0;
             foreach (var change in changesArray)
             {
+                patchIdx++;
+
+                // Логируем When-условия: мод не может их вычислить,
+                // поэтому берём расписание «как есть» (без условной фильтрации).
+                // Это может привести к загрузке маршрута, который неактуален сегодня.
+                if (change["When"] is JToken whenToken && whenToken.HasValues)
+                {
+                    _monitor.Log(
+                        $"[CustomScheduleLoader] {filePath} патч #{patchIdx}: " +
+                        $"обнаружено условие 'When' ({whenToken}). " +
+                        $"Условие игнорируется — маршрут будет загружен безусловно.",
+                        LogLevel.Debug);
+                }
+
                 if (change["Entries"] is not JToken entriesToken)
                 {
-                    _monitor.Log($"Change без 'Entries' в {filePath} — пропуск.", LogLevel.Debug);
+                    _monitor.Log($"[CustomScheduleLoader] {filePath} патч #{patchIdx}: нет 'Entries' — пропуск.", LogLevel.Debug);
                     continue;
                 }
 
-                if (ContainsI18nTokens(entriesToken)) continue;
+                if (ContainsI18nTokens(entriesToken))
+                {
+                    _monitor.Log(
+                        $"[CustomScheduleLoader] {filePath} патч #{patchIdx}: " +
+                        $"расписание содержит i18n-токены — пропуск (не поддерживается).",
+                        LogLevel.Debug);
+                    continue;
+                }
 
                 if (entriesToken is JObject entriesObj)
-                    AddScheduleEntries(entriesObj);
+                {
+                    try
+                    {
+                        AddScheduleEntries(entriesObj, filePath, patchIdx);
+                    }
+                    catch (Exception ex)
+                    {
+                        _monitor.Log(
+                            $"[CustomScheduleLoader] Ошибка разбора патча #{patchIdx} в {filePath}: {ex.Message}",
+                            LogLevel.Error);
+                    }
+                }
                 else
-                    _monitor.Log($"'Entries' не является объектом в {filePath}", LogLevel.Warn);
+                {
+                    _monitor.Log(
+                        $"[CustomScheduleLoader] {filePath} патч #{patchIdx}: 'Entries' не является объектом.",
+                        LogLevel.Warn);
+                }
             }
         }
 
-        private void AddScheduleEntries(JObject entries)
+        private void AddScheduleEntries(JObject entries, string filePath = null, int patchIdx = 0)
         {
             if (string.IsNullOrEmpty(_currentNpcName)) return;
 
@@ -181,12 +218,26 @@ namespace NpcTrackerMod.Scheduling
 
             foreach (var entry in entries)
             {
+                string rawValue = entry.Value?.ToString() ?? string.Empty;
+
+                // FromFile — ссылка на внешний файл; мы не можем его разрешить.
+                // Такие записи пропускаем с предупреждением.
+                if (rawValue.TrimStart().StartsWith("{{FromFile:", StringComparison.OrdinalIgnoreCase) ||
+                    rawValue.TrimStart().StartsWith("\"{{FromFile:", StringComparison.OrdinalIgnoreCase))
+                {
+                    _monitor.Log(
+                        $"[CustomScheduleLoader] {filePath ?? "?"} патч #{patchIdx} ключ '{entry.Key}': " +
+                        $"FromFile-ссылка не поддерживается — запись пропущена.",
+                        LogLevel.Debug);
+                    continue;
+                }
+
                 if (!npcSchedule.TryGetValue(entry.Key, out var list))
                 {
                     list = new List<string>();
                     npcSchedule[entry.Key] = list;
                 }
-                list.Add(entry.Value.ToString());
+                list.Add(rawValue);
             }
         }
 
