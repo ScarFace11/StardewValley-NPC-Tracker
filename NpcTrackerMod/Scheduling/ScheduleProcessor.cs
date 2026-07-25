@@ -293,10 +293,16 @@ namespace NpcTrackerMod.Scheduling
 
         private Dictionary<string, string> BuildMasterSchedule(NPC npc, string customPath, string customKey)
         {
-            if (npc.Schedule != null && npc.Schedule.Any())
-                return npc.getMasterScheduleRawData();
+            if (customPath != null)
+                return new Dictionary<string, string> { [customKey] = customPath };
 
-            return new Dictionary<string, string> { [customKey] = customPath };
+            if (npc.Schedule == null || !npc.Schedule.Any())
+                return new Dictionary<string, string>();
+
+            // Используем ScheduleVariantResolver для выбора активного варианта расписания.
+            // Это учитывает статус брака, погоду, сезон, сердечки дружбы —
+            // вместо того чтобы строить «объединение» всех возможных маршрутов.
+            return ScheduleVariantResolver.GetActiveSchedule(npc, _monitor);
         }
 
         private static void AppendSegment(

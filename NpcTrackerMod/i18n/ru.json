@@ -1,0 +1,48 @@
+{
+  "tab.main": "Главное",
+  "tab.npc": "NPC",
+  "tab.settings": "Настройки",
+  "tab.info": "Инфо",
+
+  "main.group.display": "Отображение",
+  "main.enable": "Включить трекер",
+  "main.grid": "Отображение сетки",
+  "main.group.routes": "Маршруты",
+  "main.allLocations": "Показывать во всех локациях",
+  "main.globalRoute": "Глобальный маршрут (весь день)",
+
+  "npc.search.placeholder": "Поиск NPC...",
+  "npc.filter.all": "Все",
+  "npc.reset": "Сбросить выбор",
+  "npc.empty.waitForDay": "Начните новый день, чтобы\nзагрузить данные NPC",
+  "npc.empty.notFound": "NPC не найдены",
+
+  "settings.keybinds": "Горячие клавиши",
+  "settings.keybind.menu": "Открыть меню",
+  "settings.keybind.debug": "Отладка варпов",
+  "settings.keybind.selectNpc": "Выбрать NPC",
+  "settings.keybind.waiting": "[нажмите клавишу...]",
+  "settings.timeFilter": "Фильтр по времени",
+  "settings.timeFilter.all": "Все время",
+  "settings.appearance": "Внешний вид",
+  "settings.routeColor": "Цвет маршрута",
+  "settings.positionColor": "Цвет позиции",
+  "settings.alpha": "Прозрачность",
+
+  "info.currentState": "Текущее состояние",
+  "info.date": "Дата",
+  "info.location": "Локация",
+  "info.worldNotReady": "Мир не загружен",
+  "info.npcStats": "Статистика NPC",
+  "info.tracked": "Отслеживается",
+  "info.inLocation": "В текущей локации",
+  "info.selected": "Выбрано NPC",
+  "info.noneSelected": "не выбраны",
+  "info.bySource": "По источнику",
+  "info.noData": "Данные появятся после начала дня",
+  "info.tip": "Подсказка",
+  "info.tipText": "Наведите курсор на тайл маршрута,\nчтобы увидеть имя NPC и время посещения.\nКликните — откроется инспектор тайла.",
+
+  "tooltip.inspector": "[{0}] Открыть инспектор",
+  "tooltip.nextAt": "→ {0} в {1}"
+}

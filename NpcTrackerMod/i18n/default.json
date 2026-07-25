@@ -1,0 +1,48 @@
+{
+  "tab.main": "Main",
+  "tab.npc": "NPC",
+  "tab.settings": "Settings",
+  "tab.info": "Info",
+
+  "main.group.display": "Display",
+  "main.enable": "Enable tracker",
+  "main.grid": "Show grid",
+  "main.group.routes": "Routes",
+  "main.allLocations": "Show in all locations",
+  "main.globalRoute": "Global route (all day)",
+
+  "npc.search.placeholder": "Search NPC...",
+  "npc.filter.all": "All",
+  "npc.reset": "Reset selection",
+  "npc.empty.waitForDay": "Start a new day to\nload NPC data",
+  "npc.empty.notFound": "No NPCs found",
+
+  "settings.keybinds": "Keybinds",
+  "settings.keybind.menu": "Open menu",
+  "settings.keybind.debug": "Debug warps",
+  "settings.keybind.selectNpc": "Select NPC",
+  "settings.keybind.waiting": "[press a key...]",
+  "settings.timeFilter": "Time filter",
+  "settings.timeFilter.all": "All time",
+  "settings.appearance": "Appearance",
+  "settings.routeColor": "Route color",
+  "settings.positionColor": "Position color",
+  "settings.alpha": "Opacity",
+
+  "info.currentState": "Current state",
+  "info.date": "Date",
+  "info.location": "Location",
+  "info.worldNotReady": "World not loaded",
+  "info.npcStats": "NPC Statistics",
+  "info.tracked": "Tracked",
+  "info.inLocation": "In current location",
+  "info.selected": "Selected NPC",
+  "info.noneSelected": "none",
+  "info.bySource": "By source",
+  "info.noData": "Data will appear after day starts",
+  "info.tip": "Tip",
+  "info.tipText": "Hover over a route tile to see the NPC name\nand visit time. Click to open the tile inspector.",
+
+  "tooltip.inspector": "[{0}] Open inspector",
+  "tooltip.nextAt": "→ {0} at {1}"
+}
