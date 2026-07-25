@@ -54,15 +54,9 @@ namespace NpcTrackerMod.Scheduling
         {
             try
             {
-<<<<<<< Updated upstream
                 // DirectoryPath указывает на папку мода (…/Mods/NpcTrackerMod).
                 // GetDirectoryName возвращает родительский каталог — саму папку Mods,
                 // независимо от ОС и расположения игры.
-=======
-                // DirectoryPath указывает на папку мода (…/Mods/NpcTrackerMod).
-                // GetDirectoryName возвращает родительский каталог — саму папку Mods,
-                // независимо от ОС и расположения игры.
->>>>>>> Stashed changes
                 string modsRoot = Path.GetDirectoryName(_helper.DirectoryPath);
 
                 foreach (var modFolder in Directory.GetDirectories(modsRoot))
