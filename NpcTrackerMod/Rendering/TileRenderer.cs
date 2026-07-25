@@ -114,13 +114,8 @@ namespace NpcTrackerMod.Rendering
                 {
                     var map = Game1.currentLocation.Map.Layers[0];
                     for (int x = 0; x < map.LayerWidth; x++)
-<<<<<<< Updated upstream
-                    for (int y = 0; y < map.LayerHeight; y++)
-                        _cachedGridTiles.Add(new Point(x, y));
-=======
                         for (int y = 0; y < map.LayerHeight; y++)
                             _cachedGridTiles.Add(new Point(x, y));
->>>>>>> Stashed changes
                 }
             }
 
