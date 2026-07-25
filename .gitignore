@@ -12,6 +12,7 @@ obj/
 .cache/
 .replit
 .replit.md
+REPLIT_AI_INSTRUCTIONS.md
 replit.nix
 zipFile.zip
 attached_assets/
