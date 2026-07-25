@@ -326,7 +326,7 @@ namespace NpcTrackerMod.UI
                     BX, BY, BOX_W, BOX_H, Color.White, 1f, true);
 
                 DrawSideTabs(b);
-                DrawCentered(b, "NPC Tracker", Game1.dialogueFont, BY + PAD, Game1.textColor);
+                DrawCentered(b, T("menu.title"), Game1.dialogueFont, BY + PAD, Game1.textColor);
 
                 switch (_activeTab)
                 {

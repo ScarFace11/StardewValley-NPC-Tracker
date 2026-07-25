@@ -11,6 +11,8 @@
   "main.allLocations": "Показывать во всех локациях",
   "main.globalRoute": "Глобальный маршрут (весь день)",
 
+  "menu.title": "NPC Tracker",
+
   "npc.search.placeholder": "Поиск NPC...",
   "npc.filter.all": "Все",
   "npc.reset": "Сбросить выбор",
@@ -43,6 +45,19 @@
   "info.tip": "Подсказка",
   "info.tipText": "Наведите курсор на тайл маршрута,\nчтобы увидеть имя NPC и время посещения.\nКликните — откроется инспектор тайла.",
 
-  "tooltip.inspector": "[{0}] Открыть инспектор",
-  "tooltip.nextAt": "→ {0} в {1}"
+  "inspect.title": "Инспектор тайла",
+  "inspect.coords": "X: {{x}}   Y: {{y}}   ·   {{count}} NPC",
+  "inspect.pagination": "{{from}}–{{to}} из {{total}}",
+  "inspect.currentLocation": "Сейчас: {{location}}",
+  "inspect.scheduleFinished": "Расписание на сегодня завершено",
+  "inspect.btn.select": "Выбрать",
+  "inspect.btn.deselect": "Снять",
+
+  "route.hereNow": "Сейчас здесь",
+  "route.upTo": "До {{time}}",
+
+  "source.vanilla": "Жители деревни",
+
+  "tooltip.inspector": "[{{key}}] Открыть инспектор",
+  "tooltip.nextAt": "→ {{location}} в {{time}}"
 }

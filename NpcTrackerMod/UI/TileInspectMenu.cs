@@ -40,6 +40,7 @@ namespace NpcTrackerMod.UI
         private readonly ModState _state;
         private readonly NpcRegistry _registry;
         private readonly TileRenderer _tiles;
+        private readonly ITranslationHelper _i18n;
 
         // ── Данные ────────────────────────────────────────────────────────────────
         private readonly Point _tile;
@@ -64,18 +65,30 @@ namespace NpcTrackerMod.UI
             TileRenderer tiles,
             Point tile,
             List<(string NpcName, string TimeInfo)> owners,
-            List<NPC> gameNpcs)
+            List<NPC> gameNpcs,
+            ITranslationHelper i18n = null)
             : base(0, 0, BOX_W, 0)
         {
             _monitor  = monitor  ?? throw new ArgumentNullException(nameof(monitor));
             _state    = state    ?? throw new ArgumentNullException(nameof(state));
             _registry = registry ?? throw new ArgumentNullException(nameof(registry));
             _tiles    = tiles    ?? throw new ArgumentNullException(nameof(tiles));
+            _i18n     = i18n;
             _tile     = tile;
 
             _npcData = BuildNpcData(owners, gameNpcs ?? new List<NPC>());
 
             InitPosition();
+        }
+
+        // ── Локализация ───────────────────────────────────────────────────────────
+
+        /// <summary> Возвращает перевод по ключу с необязательными токенами. </summary>
+        private string T(string key, object tokens = null)
+        {
+            if (_i18n == null) return key;
+            var t = tokens != null ? _i18n.Get(key, tokens) : _i18n.Get(key);
+            return t.HasValue() ? t.ToString() : key;
         }
 
         // ── Инициализация ─────────────────────────────────────────────────────────
@@ -125,7 +138,11 @@ namespace NpcTrackerMod.UI
                     if (nextTime > 0)
                     {
                         var ne = npc.Schedule[nextTime];
-                        nextDest = $"→ {ne.targetLocationName ?? "?"} в {RouteRenderer.FormatTime(nextTime)}";
+                        nextDest = T("tooltip.nextAt", new
+                        {
+                            location = ne.targetLocationName ?? "?",
+                            time     = RouteRenderer.FormatTime(nextTime)
+                        });
                     }
                 }
 
@@ -159,14 +176,14 @@ namespace NpcTrackerMod.UI
                     BX, BY, BOX_W, h, Color.White, 1f, true);
 
                 // Заголовок
-                string title = "Инспектор тайла";
+                string title = T("inspect.title");
                 var titleSz = Game1.dialogueFont.MeasureString(title);
                 Utility.drawTextWithShadow(b, title, Game1.dialogueFont,
                     new Vector2(BX + BOX_W / 2f - titleSz.X / 2f, BY + PAD),
                     Game1.textColor);
 
                 // Координаты + кол-во NPC
-                string coords = $"X: {_tile.X}   Y: {_tile.Y}   ·   {_npcData.Count} NPC";
+                string coords = T("inspect.coords", new { x = _tile.X, y = _tile.Y, count = _npcData.Count });
                 var coordSz = Game1.smallFont.MeasureString(coords);
                 Utility.drawTextWithShadow(b, coords, Game1.smallFont,
                     new Vector2(BX + BOX_W / 2f - coordSz.X / 2f, BY + PAD + 38),
@@ -193,7 +210,12 @@ namespace NpcTrackerMod.UI
                     DrawScrollbar(b, divY + 12, VISIBLE_CARDS * CARD_H);
 
                     // Счётчик
-                    string counter = $"{_scrollOffset + 1}–{end} из {_npcData.Count}";
+                    string counter = T("inspect.pagination", new
+                    {
+                        from  = _scrollOffset + 1,
+                        to    = end,
+                        total = _npcData.Count
+                    });
                     var cSz = Game1.smallFont.MeasureString(counter);
                     Utility.drawTextWithShadow(b, counter, Game1.smallFont,
                         new Vector2(BX + BOX_W / 2f - cSz.X / 2f, BY + h - 26),
@@ -259,8 +281,10 @@ namespace NpcTrackerMod.UI
             cy += 38;
 
             // ── Текущая локация + метка тайла ──
-            string locLine = $"Сейчас: {data.CurrentLocation}";
-            if (!string.IsNullOrEmpty(data.TimeInfo) && data.TimeInfo != "Маршрут")
+            // Метку времени показываем только если она не пустая (для тайлов с фильтром по времени
+            // или тайлов позиции NPC — у них timeInfo непустой).
+            string locLine = T("inspect.currentLocation", new { location = data.CurrentLocation });
+            if (!string.IsNullOrEmpty(data.TimeInfo))
                 locLine += $"   ({data.TimeInfo})";
             Utility.drawTextWithShadow(b, locLine, Game1.smallFont,
                 new Vector2(cx, cy), new Color(75, 75, 75));
@@ -275,7 +299,7 @@ namespace NpcTrackerMod.UI
             }
             else
             {
-                Utility.drawTextWithShadow(b, "Расписание на сегодня завершено", Game1.smallFont,
+                Utility.drawTextWithShadow(b, T("inspect.scheduleFinished"), Game1.smallFont,
                     new Vector2(cx, cy), Color.Gray);
                 cy += 22;
             }
@@ -302,7 +326,7 @@ namespace NpcTrackerMod.UI
             drawTextureBox(b, Game1.menuTexture, new Rectangle(0, 256, 60, 60),
                 btn.X, btn.Y, btn.Width, btn.Height, btnBg, 0.8f, false);
 
-            string btnLabel = selected ? "Снять" : "Выбрать";
+            string btnLabel = selected ? T("inspect.btn.deselect") : T("inspect.btn.select");
             var    btnSz    = Game1.smallFont.MeasureString(btnLabel);
             Utility.drawTextWithShadow(b, btnLabel, Game1.smallFont,
                 new Vector2(
