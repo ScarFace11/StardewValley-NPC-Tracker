@@ -924,12 +924,14 @@ namespace NpcTrackerMod.UI
                 return;
             }
 
-            // Цвет маршрута
+            // Цвет маршрута — после смены нужно перерисовать тайлы
             if (ColorPrevBtn(RouteColorRowY).Contains(x, y))
             {
                 _routeColorIndex = (_routeColorIndex - 1 + ColorNames.Length) % ColorNames.Length;
                 _config.RouteColor = ColorNames[_routeColorIndex];
                 _saveConfig();
+                _tiles.Clear();
+                _state.SwitchGetNpcPath = true;
                 if (playSound) Game1.playSound("smallSelect");
                 return;
             }
@@ -938,6 +940,8 @@ namespace NpcTrackerMod.UI
                 _routeColorIndex = (_routeColorIndex + 1) % ColorNames.Length;
                 _config.RouteColor = ColorNames[_routeColorIndex];
                 _saveConfig();
+                _tiles.Clear();
+                _state.SwitchGetNpcPath = true;
                 if (playSound) Game1.playSound("smallSelect");
                 return;
             }
