@@ -24,7 +24,9 @@ namespace NpcTrackerMod.Scheduling
             string season    = Game1.currentSeason ?? "spring";
             int    day       = Game1.dayOfMonth;
             bool   isRaining = Game1.isRaining || Game1.isLightning;
-            bool   isMarried = Game1.player.isMarried()
+            bool   isMarried = Game1.player != null
+                               && Game1.player.isMarriedOrRoommates
+                               && !string.IsNullOrEmpty(Game1.player.spouse)
                                && Game1.player.spouse == npc.Name;
             int    hearts    = Game1.player.getFriendshipHeartLevelForNPC(npc.Name);
 
