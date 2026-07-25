@@ -40,7 +40,10 @@ namespace NpcTrackerMod.Tracking
         /// </summary>
         public void DrawPaths(SpriteBatch spriteBatch, Vector2 cameraOffset)
         {
-            foreach (var npc in _processor.GetNpcsToTrack(_state.SwitchTargetLocations, _registry.TotalNpcList))
+            // В глобальном режиме нужны все NPC (не только те, что сейчас в текущей локации),
+            // чтобы показать весь набор маршрутов через текущую карту.
+            bool allLocations = _state.SwitchTargetLocations || _state.SwitchGlobalNpcPath;
+            foreach (var npc in _processor.GetNpcsToTrack(allLocations, _registry.TotalNpcList))
             {
                 if (npc == null || string.IsNullOrWhiteSpace(npc.Name)) continue;
                 if (!_state.SwitchTargetNPC || _registry.SelectedNpcNames.Contains(npc.Name))

@@ -108,7 +108,10 @@ namespace NpcTrackerMod.Rendering
                     return;
                 }
 
-                string targetLocation = _state.SwitchTargetLocations
+                // В глобальном режиме всегда смотрим тайлы по локации игрока —
+                // так отображаются маршруты ВСЕХ NPC через текущую карту,
+                // независимо от того, где они находятся прямо сейчас.
+                string targetLocation = (_state.SwitchGlobalNpcPath || _state.SwitchTargetLocations)
                     ? (Game1.player.currentLocation?.Name ?? string.Empty)
                     : (npc.currentLocation?.Name ?? string.Empty);
 
