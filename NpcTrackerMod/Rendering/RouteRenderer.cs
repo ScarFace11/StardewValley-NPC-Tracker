@@ -20,6 +20,7 @@ namespace NpcTrackerMod.Rendering
         private readonly NpcPathStore _store;
         private readonly TileRenderer _tiles;
         private readonly ModConfig _config;
+        private readonly ITranslationHelper _i18n;
 
         // Переиспользуемый буфер для TimeFilter — не создаётся каждый кадр
         private readonly Dictionary<string, HashSet<Point>> _timedPathBuffer
@@ -30,13 +31,25 @@ namespace NpcTrackerMod.Rendering
             ModState state,
             NpcPathStore store,
             TileRenderer tiles,
-            ModConfig config)
+            ModConfig config,
+            ITranslationHelper i18n = null)
         {
             _monitor = monitor;
             _state = state;
             _store = store;
             _tiles = tiles;
             _config = config;
+            _i18n = i18n;
+        }
+
+        // ── Локализация ───────────────────────────────────────────────────────────
+
+        /// <summary> Возвращает перевод по ключу с необязательными токенами. </summary>
+        private string T(string key, object tokens = null)
+        {
+            if (_i18n == null) return key;
+            var t = tokens != null ? _i18n.Get(key, tokens) : _i18n.Get(key);
+            return t.HasValue() ? t.ToString() : key;
         }
 
         // ── Публичный API ────────────────────────────────────────────────────────
@@ -80,7 +93,7 @@ namespace NpcTrackerMod.Rendering
                         lastTime = kvp.Key;
                     }
                     if (_timedPathBuffer.Count == 0) return;
-                    timeLabel = $"До {FormatTime(lastTime)}";
+                    timeLabel = T("route.upTo", new { time = FormatTime(lastTime) });
                     pathData = _timedPathBuffer;
                 }
                 else
@@ -104,7 +117,9 @@ namespace NpcTrackerMod.Rendering
                     foreach (var coord in tileSet)
                     {
                         _tiles.MarkTile(coord, ModConfig.ParseColor(_config.RouteColor, Color.Green), 2);
-                        _tiles.RegisterOwner(coord, npc.Name, timeLabel ?? "Маршрут");
+                        // timeLabel остаётся null для обычных маршрутов —
+                        // тултип покажет только имя NPC без лишней метки
+                        _tiles.RegisterOwner(coord, npc.Name, timeLabel);
                     }
                 }
             }
@@ -133,7 +148,7 @@ namespace NpcTrackerMod.Rendering
 
             _state.NpcPreviousPositions[name] = currentTile;
             _tiles.MarkNpcPosition(currentTile, ModConfig.ParseColor(_config.PositionColor, Color.Blue), 1);
-            _tiles.RegisterOwner(currentTile, name, "Сейчас здесь");
+            _tiles.RegisterOwner(currentTile, name, T("route.hereNow"));
         }
 
         // ── Утилита ───────────────────────────────────────────────────────────────

@@ -6,5 +6,6 @@
   "UniqueID": "ScarFace.NpcTrackerMod",
   "EntryDll": "NpcTrackerMod.dll",
   "MinimumApiVersion": "4.0.0",
+  "MinimumGameVersion": "1.6.0",
   "UpdateKeys": [ "GitHub:ScarFace11/SV_NpcTrakerMod" ]
 }

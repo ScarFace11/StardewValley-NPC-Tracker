@@ -11,6 +11,8 @@
   "main.allLocations": "Show in all locations",
   "main.globalRoute": "Global route (all day)",
 
+  "menu.title": "NPC Tracker",
+
   "npc.search.placeholder": "Search NPC...",
   "npc.filter.all": "All",
   "npc.reset": "Reset selection",
@@ -43,6 +45,19 @@
   "info.tip": "Tip",
   "info.tipText": "Hover over a route tile to see the NPC name\nand visit time. Click to open the tile inspector.",
 
-  "tooltip.inspector": "[{0}] Open inspector",
-  "tooltip.nextAt": "→ {0} at {1}"
+  "inspect.title": "Tile Inspector",
+  "inspect.coords": "X: {{x}}   Y: {{y}}   ·   {{count}} NPC",
+  "inspect.pagination": "{{from}}–{{to}} of {{total}}",
+  "inspect.currentLocation": "Now: {{location}}",
+  "inspect.scheduleFinished": "Schedule for today is complete",
+  "inspect.btn.select": "Select",
+  "inspect.btn.deselect": "Deselect",
+
+  "route.hereNow": "Here now",
+  "route.upTo": "Up to {{time}}",
+
+  "source.vanilla": "Villagers",
+
+  "tooltip.inspector": "[{{key}}] Open inspector",
+  "tooltip.nextAt": "→ {{location}} at {{time}}"
 }

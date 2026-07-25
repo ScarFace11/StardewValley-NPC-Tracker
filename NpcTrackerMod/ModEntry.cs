@@ -69,7 +69,7 @@ namespace NpcTrackerMod
             // Rendering и Tracking инициализируются здесь — GraphicsDevice гарантированно готов
             _tileRenderer = new TileRenderer(Game1.graphics.GraphicsDevice);
             _tileRenderer.Alpha = _config.RouteAlpha;
-            _routeRenderer = new RouteRenderer(Monitor, _state, _pathStore, _tileRenderer, _config);
+            _routeRenderer = new RouteRenderer(Monitor, _state, _pathStore, _tileRenderer, _config, Helper.Translation);
             _tracker = new NpcTracker(_state, _registry, _scheduleProcessor, _routeRenderer, _tileRenderer);
 
             // Подписки на события, требующие инициализированного рендерера
@@ -146,7 +146,7 @@ namespace NpcTrackerMod
                 {
                     Game1.activeClickableMenu = new TileInspectMenu(
                         Monitor, _state, _registry, _tileRenderer,
-                        tile, owners, _registry.GameNpcs);
+                        tile, owners, _registry.GameNpcs, Helper.Translation);
 
                     Helper.Input.Suppress(e.Button);
                     Game1.playSound("smallSelect");
@@ -190,7 +190,8 @@ namespace NpcTrackerMod
                     }
 
                     // Подсказка: клик открывает инспектор
-                    sb.Append($"\n[{_config.SelectNpcKey}] Открыть инспектор");
+                    sb.Append('\n');
+                    sb.Append(Helper.Translation.Get("tooltip.inspector", new { key = _config.SelectNpcKey }));
                     IClickableMenu.drawHoverText(batch, sb.ToString(), Game1.smallFont);
                 }
             }
@@ -226,7 +227,7 @@ namespace NpcTrackerMod
         }
 
         /// <summary>
-        /// Возвращает строку вида «→ Saloon в 12:00» — следующая запись расписания NPC
+        /// Возвращает локализованную строку «→ Saloon в 12:00» — следующая запись расписания NPC
         /// после текущего игрового времени. Null, если данных нет или день уже закончился.
         /// </summary>
         private string GetNextScheduleLabel(string npcName)
@@ -248,7 +249,11 @@ namespace NpcTrackerMod
 
                 var entry = npc.Schedule[nextTime];
                 string loc = entry.targetLocationName ?? "?";
-                return $"→ {loc} в {RouteRenderer.FormatTime(nextTime)}";
+                return Helper.Translation.Get("tooltip.nextAt", new
+                {
+                    location = loc,
+                    time     = RouteRenderer.FormatTime(nextTime)
+                }).ToString();
             }
             catch (Exception ex)
             {
@@ -266,7 +271,7 @@ namespace NpcTrackerMod
             {
                 _registry.NpcModSource[name] = _scheduleLoader.NpcModNames.TryGetValue(name, out string mod)
                     ? mod
-                    : "Жители деревни";
+                    : Helper.Translation.Get("source.vanilla").ToString();
             }
         }
 
