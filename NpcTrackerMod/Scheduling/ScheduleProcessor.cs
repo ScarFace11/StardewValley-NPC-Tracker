@@ -175,14 +175,19 @@ namespace NpcTrackerMod.Scheduling
 
                 // Специальный слот "TIME bed": NPC возвращается домой спать.
                 // "bed" — ключевое слово движка, не реальная карта.
-                // defaultMap и defaultPosition дают домашнюю локацию и тайл кровати.
+                // defaultMap — NetString, используем .Value.
+                // defaultPosition — protected поле Character, снаружи недоступно;
+                // вместо него берём первый warp-тайл домашней локации как точку входа.
                 if (parts.Length == 2 && parts[1] == "bed")
                 {
-                    string homeMap = npc.defaultMap;
+                    string homeMap = npc.defaultMap.Value;
                     if (!string.IsNullOrEmpty(homeMap))
                     {
-                        int bedX = (int)(npc.defaultPosition.X / Game1.tileSize);
-                        int bedY = (int)(npc.defaultPosition.Y / Game1.tileSize);
+                        // Warp-тайл у двери — ближайшая разумная точка внутри дома.
+                        // Если варпов нет, fallback (1, 1); pathfind поймает исключение.
+                        var homeLoc = Game1.getLocationFromName(homeMap);
+                        int bedX = homeLoc?.warps?.Count > 0 ? homeLoc.warps[0].X : 1;
+                        int bedY = homeLoc?.warps?.Count > 0 ? homeLoc.warps[0].Y : 1;
                         try
                         {
                             var pathDesc = npc.pathfindToNextScheduleLocation(
