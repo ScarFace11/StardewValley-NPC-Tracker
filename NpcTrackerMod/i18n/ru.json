@@ -10,6 +10,8 @@
   "main.group.routes": "Маршруты",
   "main.allLocations": "Показывать во всех локациях",
   "main.globalRoute": "Глобальный маршрут (весь день)",
+  "main.stepMode": "Пошаговый маршрут",
+  "main.stepHint": "◄ ► или скролл для навигации",
 
   "menu.title": "NPC Tracker",
 

@@ -211,6 +211,14 @@ namespace NpcTrackerMod.UI
                     _tiles.Clear();
                     _state.SwitchGetNpcPath = true;
                 });
+            AddCheck(ref y, x, T("main.stepMode"),
+                () => _state.RouteStepMode, v =>
+                {
+                    _state.RouteStepMode = v;
+                    _state.RouteStepIndex = 0;
+                    _tiles.Clear();
+                    _state.SwitchGetNpcPath = true;
+                });
         }
 
         private void AddCheck(ref int y, int x, string label,
@@ -266,6 +274,10 @@ namespace NpcTrackerMod.UI
         private int TimeRowY => BY + 331;
         private Rectangle TimePrevBtn() => new Rectangle(BX + BOX_W / 2 - 115, TimeRowY, 30, 30);
         private Rectangle TimeNextBtn() => new Rectangle(BX + BOX_W / 2 + 85,  TimeRowY, 30, 30);
+
+        // Кнопки ◄ ► навигатора шагов (navY вычисляется динамически в Draw/Click)
+        private Rectangle StepPrevBtn(int navY) => new Rectangle(BX + BOX_W / 2 - 115, navY, 30, 30);
+        private Rectangle StepNextBtn(int navY) => new Rectangle(BX + BOX_W / 2 + 85,  navY, 30, 30);
 
         private Rectangle SliderTrackRect() =>
             new Rectangle(BX + PAD, TimeRowY + 44, BOX_W - PAD * 2, 8);
@@ -375,7 +387,7 @@ namespace NpcTrackerMod.UI
 
         private void DrawMainTab(SpriteBatch b)
         {
-            if (_mainChecks.Count < 4) return;
+            if (_mainChecks.Count < 5) return;
 
             int x = BX + PAD + 6;
 
@@ -391,6 +403,32 @@ namespace NpcTrackerMod.UI
             DrawGroupHeader(b, T("main.group.routes"), x, g2Y);
             _mainChecks[2].Draw(b);
             _mainChecks[3].Draw(b);
+            _mainChecks[4].Draw(b);
+
+            // Навигатор шагов — показывается только когда:
+            // пошаговый режим включён, NPC выбран, не глобальный маршрут, данные загружены.
+            bool showNav = _state.RouteStepMode
+                           && _state.SwitchTargetNPC
+                           && !_state.SwitchGlobalNpcPath
+                           && _state.RouteStepTotal > 0;
+
+            if (showNav)
+            {
+                int navY = _mainChecks[4].Bounds.Bottom + 14;
+                DrawArrow(b, StepPrevBtn(navY), left: true);
+                DrawArrow(b, StepNextBtn(navY), left: false);
+
+                string timeStr   = RouteRenderer.FormatTime(_state.RouteStepTime);
+                string stepLabel = $"{timeStr}   ({_state.RouteStepIndex + 1} / {_state.RouteStepTotal})";
+                DrawCentered(b, stepLabel, Game1.dialogueFont, navY + 2, new Color(200, 160, 30));
+
+                // Подсказка: скролл тоже листает шаги
+                if (_state.RouteStepTotal > 1)
+                {
+                    string hint = T("main.stepHint");
+                    DrawCentered(b, hint, Game1.smallFont, navY + 36, Color.Gray);
+                }
+            }
         }
 
         // ── NPC ───────────────────────────────────────────────────────────────────────
@@ -828,6 +866,16 @@ namespace NpcTrackerMod.UI
                 if (playSound) Game1.playSound("drumkit6");
                 return;
             }
+
+            // Навигатор шагов — обрабатываем только когда данные загружены
+            if (_state.RouteStepMode && _state.SwitchTargetNPC
+                && !_state.SwitchGlobalNpcPath && _state.RouteStepTotal > 0
+                && _mainChecks.Count >= 5)
+            {
+                int navY = _mainChecks[4].Bounds.Bottom + 14;
+                if (StepPrevBtn(navY).Contains(x, y)) { ChangeStep(-1); if (playSound) Game1.playSound("smallSelect"); return; }
+                if (StepNextBtn(navY).Contains(x, y)) { ChangeStep(+1); if (playSound) Game1.playSound("smallSelect"); return; }
+            }
         }
 
         private void ClickNpc(int x, int y, bool playSound)
@@ -1055,6 +1103,18 @@ namespace NpcTrackerMod.UI
 
         public override void receiveScrollWheelAction(int direction)
         {
+            // Главная вкладка: скролл листает шаги когда активен пошаговый режим
+            if (_activeTab == 0
+                && _state.RouteStepMode
+                && _state.SwitchTargetNPC
+                && !_state.SwitchGlobalNpcPath
+                && _state.RouteStepTotal > 0)
+            {
+                ChangeStep(direction > 0 ? -1 : 1);
+                Game1.playSound("smallSelect");
+                return;
+            }
+
             if (_activeTab == 1)
             {
                 int delta = direction > 0 ? -1 : 1;
@@ -1095,6 +1155,18 @@ namespace NpcTrackerMod.UI
         {
             _timeFilterIndex = MathHelper.Clamp(_timeFilterIndex + delta, 0, TimeSteps.Length - 1);
             _state.TimeFilter = TimeSteps[_timeFilterIndex];
+            _tiles.Clear();
+            _state.SwitchGetNpcPath = true;
+        }
+
+        /// <summary>
+        /// Переключает шаг дневного маршрута и инициирует перерисовку тайлов.
+        /// </summary>
+        private void ChangeStep(int delta)
+        {
+            if (_state.RouteStepTotal <= 0) return;
+            _state.RouteStepIndex = MathHelper.Clamp(
+                _state.RouteStepIndex + delta, 0, _state.RouteStepTotal - 1);
             _tiles.Clear();
             _state.SwitchGetNpcPath = true;
         }

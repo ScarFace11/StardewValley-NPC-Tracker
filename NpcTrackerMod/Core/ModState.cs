@@ -47,5 +47,30 @@ namespace NpcTrackerMod.Core
 
         /// <summary> Предыдущие позиции NPC по имени (для восстановления цвета тайла при движении). </summary>
         public Dictionary<string, Point> NpcPreviousPositions { get; } = new Dictionary<string, Point>();
+
+        // ── Пошаговый режим ───────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Пошаговый режим просмотра дневного маршрута.
+        /// Каждый шаг — один временной слот из TimedDayPaths.
+        /// </summary>
+        public bool RouteStepMode { get; set; }
+
+        /// <summary>
+        /// Индекс текущего шага (0-based) в отсортированном списке ключей TimedDayPaths.
+        /// </summary>
+        public int RouteStepIndex { get; set; }
+
+        /// <summary>
+        /// Общее число шагов для текущего NPC. Обновляется RouteRenderer при отрисовке.
+        /// Читается меню для отображения «шаг X / N».
+        /// </summary>
+        public int RouteStepTotal { get; set; }
+
+        /// <summary>
+        /// Игровое время текущего отображаемого шага. Обновляется RouteRenderer при отрисовке.
+        /// Читается меню для отображения метки времени в навигаторе.
+        /// </summary>
+        public int RouteStepTime { get; set; }
     }
 }

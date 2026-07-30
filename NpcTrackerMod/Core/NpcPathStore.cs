@@ -95,5 +95,24 @@ namespace NpcTrackerMod.Core
             GlobalPaths.Clear();
             TimedDayPaths.Clear();
         }
+
+        // ── Пошаговый доступ ─────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Возвращает отсортированный список временных ключей дневного маршрута NPC.
+        /// Используется RouteRenderer и меню для пошагового просмотра.
+        /// Пустой список означает, что тайминговых данных нет (fallback на DayPaths).
+        /// </summary>
+        public List<int> GetStepKeys(string npcName)
+        {
+            if (string.IsNullOrEmpty(npcName) ||
+                !TimedDayPaths.TryGetValue(npcName, out var timedPath) ||
+                timedPath == null)
+                return new List<int>();
+
+            var keys = new List<int>(timedPath.Keys);
+            keys.Sort();
+            return keys;
+        }
     }
 }
