@@ -172,6 +172,46 @@ namespace NpcTrackerMod.Scheduling
             {
                 if (ScheduleEntryParser.ShouldSkip(slot)) continue;
                 var parts = slot.Split(' ');
+
+                // Специальный слот "TIME bed": NPC возвращается домой спать.
+                // "bed" — ключевое слово движка, не реальная карта.
+                // defaultMap и defaultPosition дают домашнюю локацию и тайл кровати.
+                if (parts.Length == 2 && parts[1] == "bed")
+                {
+                    string homeMap = npc.defaultMap;
+                    if (!string.IsNullOrEmpty(homeMap))
+                    {
+                        int bedX = (int)(npc.defaultPosition.X / Game1.tileSize);
+                        int bedY = (int)(npc.defaultPosition.Y / Game1.tileSize);
+                        try
+                        {
+                            var pathDesc = npc.pathfindToNextScheduleLocation(
+                                parts[0], lastLocation, npcX, npcY,
+                                homeMap, bedX, bedY, 2, null, null);
+
+                            if (pathDesc?.route != null)
+                            {
+                                NpcPathStore.MergeSegments(totalPath,
+                                    FilterRouteByLocation(npc.currentLocation?.Name, pathDesc.route));
+                            }
+
+                            lastLocation = homeMap;
+                            npcX = bedX;
+                            npcY = bedY;
+                        }
+                        catch (Exception ex)
+                        {
+                            _monitor.Log(
+                                $"Bed pathfind error: {npc.Name} {lastLocation}({npcX},{npcY}) → bed @ {parts[0]}: {ex.Message}",
+                                LogLevel.Error);
+                            lastLocation = homeMap;
+                            npcX = bedX;
+                            npcY = bedY;
+                        }
+                    }
+                    continue;
+                }
+
                 if (parts.Length <= 2) continue;
 
                 ScheduleEntryParser.Parse(parts, _lastLocationName,
@@ -210,6 +250,10 @@ namespace NpcTrackerMod.Scheduling
                     npcY = y;
                 }
             }
+
+            // Сохраняем конечную локацию — следующий вызов ProcessMasterScheduleEntry
+            // (при итерации по нескольким ключам) начнёт именно отсюда.
+            _endLocationName = lastLocation;
         }
 
         /// <summary>
@@ -302,7 +346,41 @@ namespace NpcTrackerMod.Scheduling
             // Используем ScheduleVariantResolver для выбора активного варианта расписания.
             // Это учитывает статус брака, погоду, сезон, сердечки дружбы —
             // вместо того чтобы строить «объединение» всех возможных маршрутов.
-            return ScheduleVariantResolver.GetActiveSchedule(npc, _monitor);
+            var activeSchedule = ScheduleVariantResolver.GetActiveSchedule(npc, _monitor);
+
+            // Разрешаем GOTO-редиректы верхнего уровня.
+            // Если значение ключа — "GOTO <target>", подставляем значение целевого ключа.
+            // Цикл защищён счётчиком, чтобы не уйти в бесконечную рекурсию.
+            var rawData = npc.getMasterScheduleRawData();
+            if (rawData == null || rawData.Count == 0)
+                return activeSchedule;
+
+            var resolved = new Dictionary<string, string>(activeSchedule.Count);
+            foreach (var kvp in activeSchedule)
+            {
+                string value = kvp.Value;
+                int redirects = 0;
+                while (value != null && value.StartsWith("GOTO ") && redirects < 10)
+                {
+                    string targetKey = value.Substring(5).Trim();
+                    if (!rawData.TryGetValue(targetKey, out value))
+                    {
+                        _monitor.Log(
+                            $"[BuildMasterSchedule] {npc.Name}: GOTO цель '{targetKey}' не найдена.",
+                            LogLevel.Warn);
+                        value = null;
+                    }
+                    redirects++;
+                }
+
+                if (!string.IsNullOrEmpty(value) && !value.StartsWith("GOTO "))
+                    resolved[kvp.Key] = value;
+                else
+                    _monitor.Log(
+                        $"[BuildMasterSchedule] {npc.Name}: ключ '{kvp.Key}' пропущен после разрешения GOTO.",
+                        LogLevel.Debug);
+            }
+            return resolved;
         }
 
         private static void AppendSegment(
