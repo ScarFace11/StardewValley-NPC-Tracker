@@ -24,6 +24,14 @@ namespace NpcTrackerMod.Core
         public Dictionary<string, Dictionary<int, Dictionary<string, HashSet<Point>>>> TimedDayPaths { get; }
             = new Dictionary<string, Dictionary<int, Dictionary<string, HashSet<Point>>>>();
 
+        /// <summary>
+        /// Ключ активного расписания для каждого NPC (например, "spring_Mon", "marriage", "rain").
+        /// Заполняется ScheduleProcessor при построении дневного маршрута.
+        /// Используется RouteRenderer для отображения в навигаторе пошагового режима.
+        /// </summary>
+        public Dictionary<string, string> ActiveScheduleKeys { get; }
+            = new Dictionary<string, string>();
+
         public NpcPathStore(IMonitor monitor)
         {
             _monitor = monitor;
@@ -86,6 +94,7 @@ namespace NpcTrackerMod.Core
         {
             DayPaths.Clear();
             TimedDayPaths.Clear();
+            ActiveScheduleKeys.Clear();
         }
 
         /// <summary> Полная очистка всех данных. </summary>
@@ -94,6 +103,7 @@ namespace NpcTrackerMod.Core
             DayPaths.Clear();
             GlobalPaths.Clear();
             TimedDayPaths.Clear();
+            ActiveScheduleKeys.Clear();
         }
 
         // ── Пошаговый доступ ─────────────────────────────────────────────────────

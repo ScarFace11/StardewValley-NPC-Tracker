@@ -26,6 +26,11 @@ namespace NpcTrackerMod.Rendering
         private readonly Dictionary<string, HashSet<Point>> _timedPathBuffer
             = new Dictionary<string, HashSet<Point>>();
 
+        // Цвета стартового и конечного тайла пошагового маршрута.
+        // Static readonly — значения не аллоцируются каждый кадр.
+        private static readonly Color StepStartColor = new Color(30, 185, 215);  // холодный — откуда стартует
+        private static readonly Color StepEndColor   = new Color(215, 100, 0);   // тёплый — куда придёт
+
         public RouteRenderer(
             IMonitor monitor,
             ModState state,
@@ -185,6 +190,7 @@ namespace NpcTrackerMod.Rendering
             if (keys.Count == 0)
             {
                 // Тайминговых данных нет — fallback на полный DayPath без шагов.
+                _state.RouteStepScheduleKey = null;
                 _monitor.Log(
                     $"[StepRoute] {npc.Name}: TimedDayPaths пуст, показываем DayPath целиком.",
                     LogLevel.Debug);
@@ -214,6 +220,10 @@ namespace NpcTrackerMod.Rendering
             int timeKey = keys[idx];
             _state.RouteStepTime = timeKey;
 
+            // Обновляем ключ активного расписания — читается меню для навигатора.
+            _store.ActiveScheduleKeys.TryGetValue(npc.Name, out string schedKey);
+            _state.RouteStepScheduleKey = schedKey;
+
             if (!_store.TimedDayPaths.TryGetValue(npc.Name, out var timedPath) ||
                 !timedPath.TryGetValue(timeKey, out var stepPath))
                 return;
@@ -231,6 +241,43 @@ namespace NpcTrackerMod.Rendering
             {
                 _tiles.MarkTile(coord, ModConfig.ParseColor(_config.RouteColor, Color.Green), 2);
                 _tiles.RegisterOwner(coord, npc.Name, label);
+            }
+
+            // Отмечаем стартовый и конечный тайл отдельными цветами.
+            DrawStepEndpoints(npc, keys, idx, timeKey, targetLocation, label);
+        }
+
+        /// <summary>
+        /// Отмечает стартовый и конечный тайлы текущего шага маршрута особыми цветами.
+        /// Конечный тайл берётся из npc.Schedule[timeKey].targetTile (официальная цель шага).
+        /// Стартовый — конечный тайл предыдущего шага (если шаг не первый).
+        /// Не вычисляет маршруты — только регистрирует тайлы в TileRenderer.
+        /// </summary>
+        private void DrawStepEndpoints(
+            NPC npc, List<int> keys, int idx, int timeKey,
+            string targetLocation, string label)
+        {
+            if (npc.Schedule == null) return;
+
+            // Конечный тайл: куда NPC придёт в конце этого шага.
+            if (npc.Schedule.TryGetValue(timeKey, out var entry)
+                && entry.targetLocationName == targetLocation)
+            {
+                _tiles.MarkTile(entry.targetTile, StepEndColor, 3);
+                _tiles.RegisterOwner(entry.targetTile, npc.Name, label);
+            }
+
+            // Стартовый тайл: конечная точка предыдущего шага.
+            // Для первого шага (idx == 0) стартовая позиция — домашняя точка NPC,
+            // которая находится вне текущей карты в большинстве случаев, поэтому не отображается.
+            if (idx <= 0) return;
+
+            int prevKey = keys[idx - 1];
+            if (npc.Schedule.TryGetValue(prevKey, out var prevEntry)
+                && prevEntry.targetLocationName == targetLocation)
+            {
+                _tiles.MarkTile(prevEntry.targetTile, StepStartColor, 3);
+                _tiles.RegisterOwner(prevEntry.targetTile, npc.Name, label);
             }
         }
     }

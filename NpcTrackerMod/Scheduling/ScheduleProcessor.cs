@@ -85,6 +85,12 @@ namespace NpcTrackerMod.Scheduling
             _registry.TotalNpcList.Add(npc.Name);
             _store.TimedDayPaths[npc.Name] = timedPath;
 
+            // Сохраняем ключ активного расписания (например, "spring_Mon", "marriage").
+            // Читается RouteRenderer для отображения в навигаторе пошагового режима.
+            string activeKey = ScheduleVariantResolver.GetActiveKey(npc, _monitor);
+            if (!string.IsNullOrEmpty(activeKey))
+                _store.ActiveScheduleKeys[npc.Name] = activeKey;
+
             _lastLocationName = null;
             _store.AddPath(npc, _store.DayPaths, totalPath);
         }

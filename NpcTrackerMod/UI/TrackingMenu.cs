@@ -216,6 +216,7 @@ namespace NpcTrackerMod.UI
                 {
                     _state.RouteStepMode = v;
                     _state.RouteStepIndex = 0;
+                    _state.RouteStepScheduleKey = null;
                     _tiles.Clear();
                     _state.SwitchGetNpcPath = true;
                 });
@@ -422,11 +423,16 @@ namespace NpcTrackerMod.UI
                 string stepLabel = $"{timeStr}   ({_state.RouteStepIndex + 1} / {_state.RouteStepTotal})";
                 DrawCentered(b, stepLabel, Game1.dialogueFont, navY + 2, new Color(200, 160, 30));
 
+                // Ключ активного расписания (например "spring_Mon", "marriage")
+                if (!string.IsNullOrEmpty(_state.RouteStepScheduleKey))
+                    DrawCentered(b, _state.RouteStepScheduleKey, Game1.smallFont,
+                        navY + 36, new Color(130, 100, 60));
+
                 // Подсказка: скролл тоже листает шаги
                 if (_state.RouteStepTotal > 1)
                 {
                     string hint = T("main.stepHint");
-                    DrawCentered(b, hint, Game1.smallFont, navY + 36, Color.Gray);
+                    DrawCentered(b, hint, Game1.smallFont, navY + 54, Color.Gray);
                 }
             }
         }

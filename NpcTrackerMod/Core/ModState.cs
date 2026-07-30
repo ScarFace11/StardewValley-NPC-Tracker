@@ -72,5 +72,12 @@ namespace NpcTrackerMod.Core
         /// Читается меню для отображения метки времени в навигаторе.
         /// </summary>
         public int RouteStepTime { get; set; }
+
+        /// <summary>
+        /// Ключ активного расписания текущего NPC в пошаговом режиме
+        /// (например, "spring_Mon", "marriage", "rain").
+        /// Обновляется RouteRenderer при отрисовке. Null вне пошагового режима.
+        /// </summary>
+        public string RouteStepScheduleKey { get; set; }
     }
 }
