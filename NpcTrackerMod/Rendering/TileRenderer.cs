@@ -81,8 +81,16 @@ namespace NpcTrackerMod.Rendering
 
         /// <summary>
         /// Убирает временный цвет NPC с тайла (при движении персонажа).
+        /// Если тайл находился в TileStates только как позиция (Priority == 1),
+        /// удаляет его полностью — маршрутных данных под ним нет.
+        /// Маршрутные тайлы (Priority 2+) остаются нетронутыми.
         /// </summary>
-        public void RestorePosition(Point tile) => NpcPositionColors.Remove(tile);
+        public void RestorePosition(Point tile)
+        {
+            NpcPositionColors.Remove(tile);
+            if (TileStates.TryGetValue(tile, out var state) && state.Priority == 1)
+                TileStates.Remove(tile);
+        }
 
         // ── Отрисовка ────────────────────────────────────────────────────────────
 
