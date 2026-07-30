@@ -125,6 +125,15 @@ namespace NpcTrackerMod
         private void OnButtonPressed(object sender, ButtonPressedEventArgs e)
         {
             if (!Context.IsWorldReady) return;
+
+            // Пока поиск NPC в фокусе — подавляем все кнопки, чтобы игровые
+            // горячие клавиши (чат, инвентарь и т.д.) не срабатывали при вводе.
+            if (Game1.activeClickableMenu is TrackingMenu tm && tm.IsSearchFocused)
+            {
+                Helper.Input.Suppress(e.Button);
+                return;
+            }
+
             if (Game1.activeClickableMenu != null || !Context.IsPlayerFree) return;
 
             if (e.Button == _config.MenuKey)

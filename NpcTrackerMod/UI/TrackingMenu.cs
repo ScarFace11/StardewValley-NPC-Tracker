@@ -144,6 +144,9 @@ namespace NpcTrackerMod.UI
             return t.HasValue() ? t.ToString() : key;
         }
 
+        /// <summary> True пока поле поиска NPC в фокусе. </summary>
+        public bool IsSearchFocused => _searchFocused;
+
         private void OnWindowTextInput(object sender, TextInputEventArgs e)
         {
             if (!_searchFocused) return;
@@ -254,9 +257,9 @@ namespace NpcTrackerMod.UI
 
         private const int RESET_BTN_W = 130;
         private Rectangle NpcSearchRect() =>
-            new Rectangle(BX + PAD, BY + 58, BOX_W - PAD * 2 - RESET_BTN_W - 8, 36);
+            new Rectangle(BX + PAD, BY + 56, BOX_W - PAD * 2 - RESET_BTN_W - 8, 42);
         private Rectangle NpcResetBtnRect() =>
-            new Rectangle(BX + BOX_W - PAD - RESET_BTN_W, BY + 58, RESET_BTN_W, 36);
+            new Rectangle(BX + BOX_W - PAD - RESET_BTN_W, BY + 56, RESET_BTN_W, 42);
 
         private int NpcFilterY => NpcSearchRect().Bottom + 8;
         private int NpcListY   => NpcFilterY + 34;
