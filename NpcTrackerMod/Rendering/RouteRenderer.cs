@@ -64,6 +64,14 @@ namespace NpcTrackerMod.Rendering
             {
                 if (!_state.SwitchGetNpcPath || npc == null) return;
 
+                // Пошаговый режим перехватывает управление до стандартной логики.
+                // Работает только для дневного маршрута (TimedDayPaths).
+                if (_state.RouteStepMode && !_state.SwitchGlobalNpcPath)
+                {
+                    DrawStepRoute(npc);
+                    return;
+                }
+
                 string timeLabel = null;
                 Dictionary<string, HashSet<Point>> pathData = null;
 
@@ -161,6 +169,69 @@ namespace NpcTrackerMod.Rendering
         {
             int display = gameTime >= 2400 ? gameTime - 2400 : gameTime;
             return $"{display / 100:D2}:{display % 100:D2}";
+        }
+
+        // ── Пошаговый режим ───────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Отображает один временной слот дневного маршрута NPC.
+        /// Обновляет RouteStepTotal и RouteStepTime в ModState для навигатора в меню.
+        /// </summary>
+        private void DrawStepRoute(NPC npc)
+        {
+            var keys = _store.GetStepKeys(npc.Name);
+            _state.RouteStepTotal = keys.Count;
+
+            if (keys.Count == 0)
+            {
+                // Тайминговых данных нет — fallback на полный DayPath без шагов.
+                _monitor.Log(
+                    $"[StepRoute] {npc.Name}: TimedDayPaths пуст, показываем DayPath целиком.",
+                    LogLevel.Debug);
+
+                if (!_store.DayPaths.TryGetValue(npc.Name, out var fallback) || fallback == null)
+                    return;
+
+                string targetLoc = _state.SwitchTargetLocations
+                    ? (Game1.player.currentLocation?.Name ?? string.Empty)
+                    : (npc.currentLocation?.Name ?? string.Empty);
+
+                if (fallback.TryGetValue(targetLoc, out var fallbackTiles))
+                {
+                    foreach (var coord in fallbackTiles)
+                    {
+                        _tiles.MarkTile(coord, ModConfig.ParseColor(_config.RouteColor, Color.Green), 2);
+                        _tiles.RegisterOwner(coord, npc.Name, null);
+                    }
+                }
+                return;
+            }
+
+            // Зажимаем индекс на случай смены NPC или перезагрузки данных.
+            int idx = Math.Max(0, Math.Min(_state.RouteStepIndex, keys.Count - 1));
+            _state.RouteStepIndex = idx;
+
+            int timeKey = keys[idx];
+            _state.RouteStepTime = timeKey;
+
+            if (!_store.TimedDayPaths.TryGetValue(npc.Name, out var timedPath) ||
+                !timedPath.TryGetValue(timeKey, out var stepPath))
+                return;
+
+            string targetLocation = _state.SwitchTargetLocations
+                ? (Game1.player.currentLocation?.Name ?? string.Empty)
+                : (npc.currentLocation?.Name ?? string.Empty);
+
+            if (!stepPath.TryGetValue(targetLocation, out var tileSet))
+                return;
+
+            // Метка для тултипа: время и порядковый номер шага.
+            string label = $"{FormatTime(timeKey)}  ({idx + 1}/{keys.Count})";
+            foreach (var coord in tileSet)
+            {
+                _tiles.MarkTile(coord, ModConfig.ParseColor(_config.RouteColor, Color.Green), 2);
+                _tiles.RegisterOwner(coord, npc.Name, label);
+            }
         }
     }
 }

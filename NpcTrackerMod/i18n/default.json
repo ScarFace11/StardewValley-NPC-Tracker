@@ -10,6 +10,8 @@
   "main.group.routes": "Routes",
   "main.allLocations": "Show in all locations",
   "main.globalRoute": "Global route (all day)",
+  "main.stepMode": "Step-by-step route",
+  "main.stepHint": "◄ ► or scroll to navigate",
 
   "menu.title": "NPC Tracker",
 
