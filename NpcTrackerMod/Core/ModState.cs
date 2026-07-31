@@ -79,5 +79,20 @@ namespace NpcTrackerMod.Core
         /// Обновляется RouteRenderer при отрисовке. Null вне пошагового режима.
         /// </summary>
         public string RouteStepScheduleKey { get; set; }
+
+        // ── Выбор варианта расписания ──────────────────────────────────────────────
+
+        /// <summary>
+        /// Ключ варианта расписания, выбранного пользователем для отображения
+        /// (например, "spring_Mon", "marriage", "rain").
+        /// Null означает использование активного дневного расписания (TimedDayPaths).
+        /// </summary>
+        public string SelectedVariantKey { get; set; }
+
+        /// <summary>
+        /// Флаг-запрос на построение тайминговых путей для SelectedVariantKey.
+        /// Устанавливается UI при выборе варианта. Обрабатывается и сбрасывается в ModEntry.
+        /// </summary>
+        public bool SwitchBuildVariant { get; set; }
     }
 }

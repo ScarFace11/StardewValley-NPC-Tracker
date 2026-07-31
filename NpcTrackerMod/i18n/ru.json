@@ -12,6 +12,8 @@
   "main.globalRoute": "Глобальный маршрут (весь день)",
   "main.stepMode": "Пошаговый маршрут",
   "main.stepHint": "◄ ► или скролл для навигации",
+  "main.variant.label": "Вариант расписания",
+  "main.variant.active": "Сегодня",
 
   "menu.title": "NPC Tracker",
 

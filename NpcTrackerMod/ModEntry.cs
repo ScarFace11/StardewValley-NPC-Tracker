@@ -234,7 +234,18 @@ namespace NpcTrackerMod
 
         private void OnUpdateTicked(object sender, UpdateTickedEventArgs e)
         {
-            if (!_dayActive || !e.IsMultipleOf(60)) return;
+            if (!_dayActive) return;
+
+            // Обработка запроса на построение маршрута выбранного варианта расписания.
+            // Проверяется каждый тик для минимальной задержки после клика в меню.
+            if (_state.SwitchBuildVariant)
+            {
+                _state.SwitchBuildVariant = false;
+                BuildSelectedVariantRoute();
+            }
+
+            // Остальное — только каждые 60 тиков (~1 сек).
+            if (!e.IsMultipleOf(60)) return;
             if (!_state.EnableDisplay || _state.SwitchGlobalNpcPath || _state.SwitchTargetLocations) return;
 
             int npcCount = Game1.player.currentLocation.characters.Count();
@@ -245,6 +256,40 @@ namespace NpcTrackerMod
             _state.NpcCount = npcCount;
 
             _registry.RefreshCurrentNpcList();
+        }
+
+        /// <summary>
+        /// Строит тайминговые пути для текущего SelectedVariantKey и выбранного NPC.
+        /// Вызывается из OnUpdateTicked при SwitchBuildVariant == true.
+        /// </summary>
+        private void BuildSelectedVariantRoute()
+        {
+            if (string.IsNullOrEmpty(_state.SelectedVariantKey)) return;
+
+            var npc = _registry.GameNpcs?.FirstOrDefault(
+                n => n?.Name == _registry.CurrentNpcName);
+
+            if (npc == null)
+            {
+                Monitor.Log(
+                    $"[BuildVariantRoute] NPC '{_registry.CurrentNpcName}' не найден.",
+                    LogLevel.Warn);
+                return;
+            }
+
+            try
+            {
+                _scheduleProcessor.BuildVariantTimedRoute(npc, _state.SelectedVariantKey);
+                _tileRenderer.Clear();
+                _state.RouteStepIndex = 0;
+                _state.SwitchGetNpcPath = true;
+            }
+            catch (Exception ex)
+            {
+                Monitor.Log(
+                    $"Ошибка построения варианта '{_state.SelectedVariantKey}' для {npc.Name}: {ex.Message}",
+                    LogLevel.Error);
+            }
         }
 
         /// <summary>
@@ -302,6 +347,10 @@ namespace NpcTrackerMod
             _state.NpcPreviousPositions.Clear();
             _state.SwitchGetNpcPath = false;
             _state.NpcCount = 0;
+
+            // Сбрасываем выбранный вариант — данные варианта будут перестроены в новый день.
+            _state.SelectedVariantKey = null;
+            _state.SwitchBuildVariant = false;
 
             _registry.ClearDay();
             _pathStore.ClearDay();

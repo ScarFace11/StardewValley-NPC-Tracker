@@ -74,6 +74,10 @@ namespace NpcTrackerMod.Scheduling
             if (!string.IsNullOrEmpty(activeKey))
                 _store.ActiveScheduleKeys[npc.Name] = activeKey;
 
+            // Сохраняем все доступные ключи вариантов расписания.
+            // Читается TrackingMenu для отображения списка вариантов в пошаговом режиме.
+            PopulateVariantKeys(npc);
+
             _store.AddPath(npc, _store.DayPaths, totalPath);
         }
 
@@ -136,6 +140,127 @@ namespace NpcTrackerMod.Scheduling
             }
 
             _store.AddPath(npc, _store.GlobalPaths, totalPath);
+        }
+
+        /// <summary>
+        /// Строит тайминговые пути для конкретного варианта расписания NPC.
+        /// Результат сохраняется в VariantTimedPaths для использования в пошаговом режиме.
+        /// Вызывается по запросу из ModEntry при выборе пользователем варианта.
+        /// </summary>
+        public void BuildVariantTimedRoute(NPC npc, string variantKey)
+        {
+            if (npc == null || string.IsNullOrEmpty(variantKey)) return;
+
+            var rawData = npc.getMasterScheduleRawData();
+            if (rawData == null || !rawData.TryGetValue(variantKey, out string rawValue))
+            {
+                _monitor.Log($"[VariantRoute] {npc.Name}: ключ '{variantKey}' не найден в rawData.", LogLevel.Warn);
+                return;
+            }
+
+            // Разрешаем GOTO-редиректы верхнего уровня.
+            string value = rawValue;
+            int redirects = 0;
+            while (value != null && value.StartsWith("GOTO ") && redirects < 10)
+            {
+                string targetKey = value.Substring(5).Trim();
+                if (!rawData.TryGetValue(targetKey, out value))
+                {
+                    _monitor.Log($"[VariantRoute] {npc.Name}: GOTO цель '{targetKey}' не найдена.", LogLevel.Warn);
+                    return;
+                }
+                redirects++;
+            }
+
+            if (string.IsNullOrEmpty(value) || value.StartsWith("GOTO "))
+            {
+                _monitor.Log($"[VariantRoute] {npc.Name}: не удалось разрешить вариант '{variantKey}'.", LogLevel.Warn);
+                return;
+            }
+
+            var timedPath = new Dictionary<int, Dictionary<string, HashSet<Point>>>();
+
+            string lastLocationName = null;
+            string lastLocation     = npc.currentLocation?.Name;
+            int    npcX             = npc.TilePoint.X;
+            int    npcY             = npc.TilePoint.Y;
+
+            var slots = value.Split('/');
+            foreach (var slot in slots)
+            {
+                if (ScheduleEntryParser.ShouldSkip(slot)) continue;
+
+                var parts = slot.Split(' ');
+
+                // Специальный слот "TIME bed": NPC возвращается домой спать.
+                if (parts.Length == 2 && parts[1] == "bed")
+                {
+                    string homeMap = npc.defaultMap.Value;
+                    if (!string.IsNullOrEmpty(homeMap))
+                    {
+                        var homeLoc = Game1.getLocationFromName(homeMap);
+                        int bedX = homeLoc?.warps?.Count > 0 ? homeLoc.warps[0].X : 1;
+                        int bedY = homeLoc?.warps?.Count > 0 ? homeLoc.warps[0].Y : 1;
+                        lastLocation = homeMap;
+                        npcX = bedX;
+                        npcY = bedY;
+                    }
+                    continue;
+                }
+
+                if (parts.Length <= 2) continue;
+
+                ScheduleEntryParser.Parse(parts, lastLocationName,
+                    out string time, out string locationName,
+                    out int x, out int y,
+                    out int facingDir, out string endBehavior, out string endMessage);
+
+                if (IsAnimationLocation(locationName)) continue;
+
+                if (!int.TryParse(time, out int timeInt)) continue;
+
+                try
+                {
+                    var pathDesc = npc.pathfindToNextScheduleLocation(
+                        time, lastLocation, npcX, npcY,
+                        locationName, x, y,
+                        facingDir, endBehavior, endMessage);
+
+                    if (pathDesc?.route != null)
+                    {
+                        var segments = FilterRouteByLocation(
+                            npc.currentLocation?.Name, pathDesc.route, ref lastLocationName);
+
+                        if (segments.Count > 0)
+                            timedPath[timeInt] = segments;
+                    }
+
+                    lastLocation = locationName;
+                    npcX = x;
+                    npcY = y;
+                }
+                catch (Exception ex)
+                {
+                    _monitor.Log(
+                        $"[VariantRoute] Pathfind: {npc.Name} → {locationName}({x},{y}) @ {time}: {ex.Message}",
+                        LogLevel.Error);
+                    lastLocation = locationName;
+                    npcX = x;
+                    npcY = y;
+                }
+            }
+
+            // Сохраняем в VariantTimedPaths.
+            if (!_store.VariantTimedPaths.TryGetValue(npc.Name, out var variantPaths))
+            {
+                variantPaths = new Dictionary<string, Dictionary<int, Dictionary<string, HashSet<Point>>>>();
+                _store.VariantTimedPaths[npc.Name] = variantPaths;
+            }
+            variantPaths[variantKey] = timedPath;
+
+            _monitor.Log(
+                $"[VariantRoute] {npc.Name}: вариант '{variantKey}' построен, {timedPath.Count} шагов.",
+                LogLevel.Debug);
         }
 
         // ── Внутренняя обработка ─────────────────────────────────────────────────
@@ -328,6 +453,19 @@ namespace NpcTrackerMod.Scheduling
         }
 
         // ── Вспомогательные ──────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Заполняет NpcVariantKeys для данного NPC списком всех ключей его сырого расписания.
+        /// </summary>
+        private void PopulateVariantKeys(NPC npc)
+        {
+            var rawData = npc.getMasterScheduleRawData();
+            if (rawData == null || rawData.Count == 0) return;
+
+            var keys = new List<string>(rawData.Keys);
+            keys.Sort(StringComparer.OrdinalIgnoreCase);
+            _registry.NpcVariantKeys[npc.Name] = keys;
+        }
 
         /// <summary>
         /// Возвращает true, если имя локации является анимационным ключом SpaceCore

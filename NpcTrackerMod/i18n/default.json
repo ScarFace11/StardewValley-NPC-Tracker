@@ -12,6 +12,8 @@
   "main.globalRoute": "Global route (all day)",
   "main.stepMode": "Step-by-step route",
   "main.stepHint": "◄ ► or scroll to navigate",
+  "main.variant.label": "Schedule variant",
+  "main.variant.active": "Today",
 
   "menu.title": "NPC Tracker",
 

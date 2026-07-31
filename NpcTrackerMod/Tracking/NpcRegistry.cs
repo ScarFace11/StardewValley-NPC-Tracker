@@ -37,6 +37,14 @@ namespace NpcTrackerMod.Tracking
         /// <summary> Чёрный список — эти NPC не отслеживаются. </summary>
         public HashSet<string> BlacklistedNpcs { get; } = new HashSet<string>();
 
+        /// <summary>
+        /// Все ключи вариантов расписания для каждого NPC.
+        /// Заполняется ScheduleProcessor при построении дневного маршрута.
+        /// Читается TrackingMenu для отображения выбора варианта в пошаговом режиме.
+        /// </summary>
+        public Dictionary<string, List<string>> NpcVariantKeys { get; }
+            = new Dictionary<string, List<string>>();
+
         public NpcRegistry(IMonitor monitor, NpcPathStore store)
         {
             _monitor = monitor;
@@ -133,6 +141,7 @@ namespace NpcTrackerMod.Tracking
             CurrentNpcList.Clear();
             CurrentNpcName = null;
             SelectedNpcNames.Clear();
+            NpcVariantKeys.Clear();
         }
     }
 }

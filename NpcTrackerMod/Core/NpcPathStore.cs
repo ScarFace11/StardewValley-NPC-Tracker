@@ -32,10 +32,23 @@ namespace NpcTrackerMod.Core
         public Dictionary<string, string> ActiveScheduleKeys { get; }
             = new Dictionary<string, string>();
 
+        /// <summary>
+        /// Тайминговые пути по конкретным вариантам расписания:
+        /// NPC → ключ варианта → время → локация → тайлы.
+        /// Заполняется по запросу через ScheduleProcessor.BuildVariantTimedRoute.
+        /// </summary>
+        public Dictionary<string, Dictionary<string, Dictionary<int, Dictionary<string, HashSet<Point>>>>> VariantTimedPaths { get; }
+            = new Dictionary<string, Dictionary<string, Dictionary<int, Dictionary<string, HashSet<Point>>>>>();
+
         // Кеш отсортированных временных ключей для пошагового режима.
         // Инвалидируется в ClearDay — ключи не меняются в течение дня.
         private readonly Dictionary<string, List<int>> _sortedStepKeyCache
             = new Dictionary<string, List<int>>();
+
+        // Кеш отсортированных временных ключей для вариантных маршрутов.
+        // Инвалидируется в ClearDay.
+        private readonly Dictionary<string, Dictionary<string, List<int>>> _variantStepKeyCache
+            = new Dictionary<string, Dictionary<string, List<int>>>();
 
         public NpcPathStore(IMonitor monitor)
         {
@@ -100,7 +113,9 @@ namespace NpcTrackerMod.Core
             DayPaths.Clear();
             TimedDayPaths.Clear();
             ActiveScheduleKeys.Clear();
+            VariantTimedPaths.Clear();
             _sortedStepKeyCache.Clear();
+            _variantStepKeyCache.Clear();
         }
 
         /// <summary> Полная очистка всех данных. </summary>
@@ -110,7 +125,9 @@ namespace NpcTrackerMod.Core
             GlobalPaths.Clear();
             TimedDayPaths.Clear();
             ActiveScheduleKeys.Clear();
+            VariantTimedPaths.Clear();
             _sortedStepKeyCache.Clear();
+            _variantStepKeyCache.Clear();
         }
 
         // ── Пошаговый доступ ─────────────────────────────────────────────────────
@@ -133,6 +150,35 @@ namespace NpcTrackerMod.Core
             var keys = new List<int>(timedPath.Keys);
             keys.Sort();
             _sortedStepKeyCache[npcName] = keys;
+            return keys;
+        }
+
+        /// <summary>
+        /// Возвращает отсортированный список временных ключей для конкретного варианта расписания.
+        /// Результат кешируется. Пустой список — вариант не построен или данных нет.
+        /// </summary>
+        public List<int> GetVariantStepKeys(string npcName, string variantKey)
+        {
+            if (string.IsNullOrEmpty(npcName) || string.IsNullOrEmpty(variantKey))
+                return new List<int>();
+
+            if (!VariantTimedPaths.TryGetValue(npcName, out var variantPaths) ||
+                !variantPaths.TryGetValue(variantKey, out var timedPath) ||
+                timedPath == null)
+                return new List<int>();
+
+            if (!_variantStepKeyCache.TryGetValue(npcName, out var npcCache))
+            {
+                npcCache = new Dictionary<string, List<int>>();
+                _variantStepKeyCache[npcName] = npcCache;
+            }
+
+            if (npcCache.TryGetValue(variantKey, out var cached))
+                return cached;
+
+            var keys = new List<int>(timedPath.Keys);
+            keys.Sort();
+            npcCache[variantKey] = keys;
             return keys;
         }
     }

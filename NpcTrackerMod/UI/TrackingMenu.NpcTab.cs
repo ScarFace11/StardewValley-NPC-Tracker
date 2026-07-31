@@ -229,6 +229,8 @@ namespace NpcTrackerMod.UI
                 _registry.SelectedNpcNames.Clear();
                 _registry.CurrentNpcName   = null;
                 _state.SwitchTargetNPC     = false;
+                _state.SelectedVariantKey  = null;
+                _state.SwitchBuildVariant  = false;
                 _tiles.Clear();
                 _registry.CurrentNpcList.Clear();
                 _state.SwitchGetNpcPath = true;
@@ -261,6 +263,11 @@ namespace NpcTrackerMod.UI
                     _registry.CurrentNpcName = name;
                     _state.NpcSelected = i;
                 }
+
+                // При смене NPC сбрасываем выбранный вариант расписания,
+                // так как варианты у разных NPC не совпадают.
+                _state.SelectedVariantKey = null;
+                _state.SwitchBuildVariant = false;
 
                 _tiles.Clear();
                 _registry.CurrentNpcList.Clear();

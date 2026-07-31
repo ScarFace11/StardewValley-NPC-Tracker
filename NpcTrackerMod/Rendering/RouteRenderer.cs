@@ -65,7 +65,7 @@ namespace NpcTrackerMod.Rendering
                 if (!_state.SwitchGetNpcPath || npc == null) return;
 
                 // Пошаговый режим перехватывает управление до стандартной логики.
-                // Работает только для дневного маршрута (TimedDayPaths).
+                // Работает только для дневного маршрута (TimedDayPaths / VariantTimedPaths).
                 if (_state.RouteStepMode && !_state.SwitchGlobalNpcPath)
                 {
                     DrawStepRoute(npc);
@@ -174,18 +174,40 @@ namespace NpcTrackerMod.Rendering
         // ── Пошаговый режим ───────────────────────────────────────────────────────
 
         /// <summary>
-        /// Отображает один временной слот дневного маршрута NPC.
+        /// Отображает один временной слот маршрута NPC.
+        /// Если выбран вариант расписания — использует VariantTimedPaths.
+        /// Иначе — стандартный TimedDayPaths активного расписания.
         /// Обновляет RouteStepTotal и RouteStepTime в ModState для навигатора в меню.
         /// </summary>
         private void DrawStepRoute(NPC npc)
         {
-            var keys = _store.GetStepKeys(npc.Name);
+            bool useVariant = !string.IsNullOrEmpty(_state.SelectedVariantKey)
+                              && _store.VariantTimedPaths.TryGetValue(npc.Name, out var variantPaths)
+                              && variantPaths.ContainsKey(_state.SelectedVariantKey);
+
+            List<int> keys;
+            Dictionary<int, Dictionary<string, HashSet<Point>>> timedPath;
+
+            if (useVariant)
+            {
+                keys = _store.GetVariantStepKeys(npc.Name, _state.SelectedVariantKey);
+                _store.VariantTimedPaths[npc.Name].TryGetValue(_state.SelectedVariantKey, out timedPath);
+            }
+            else
+            {
+                keys = _store.GetStepKeys(npc.Name);
+                _store.TimedDayPaths.TryGetValue(npc.Name, out timedPath);
+            }
+
             _state.RouteStepTotal = keys.Count;
 
             if (keys.Count == 0)
             {
-                // Тайминговых данных нет — fallback на полный DayPath без шагов.
-                _state.RouteStepScheduleKey = null;
+                // Тайминговых данных нет — для варианта просто ждём построения;
+                // для активного расписания — fallback на полный DayPath.
+                _state.RouteStepScheduleKey = _state.SelectedVariantKey;
+                if (useVariant) return;
+
                 _monitor.Log(
                     $"[StepRoute] {npc.Name}: TimedDayPaths пуст, показываем DayPath целиком.",
                     LogLevel.Debug);
@@ -215,12 +237,16 @@ namespace NpcTrackerMod.Rendering
             int timeKey = keys[idx];
             _state.RouteStepTime = timeKey;
 
-            // Обновляем ключ активного расписания — читается меню для навигатора.
-            _store.ActiveScheduleKeys.TryGetValue(npc.Name, out string schedKey);
-            _state.RouteStepScheduleKey = schedKey;
+            // Обновляем ключ отображаемого расписания.
+            if (useVariant)
+                _state.RouteStepScheduleKey = _state.SelectedVariantKey;
+            else
+            {
+                _store.ActiveScheduleKeys.TryGetValue(npc.Name, out string schedKey);
+                _state.RouteStepScheduleKey = schedKey;
+            }
 
-            if (!_store.TimedDayPaths.TryGetValue(npc.Name, out var timedPath) ||
-                !timedPath.TryGetValue(timeKey, out var stepPath))
+            if (timedPath == null || !timedPath.TryGetValue(timeKey, out var stepPath))
                 return;
 
             string targetLocation = _state.SwitchTargetLocations
@@ -238,8 +264,10 @@ namespace NpcTrackerMod.Rendering
                 _tiles.RegisterOwner(coord, npc.Name, label);
             }
 
-            // Отмечаем стартовый и конечный тайл отдельными цветами.
-            DrawStepEndpoints(npc, keys, idx, timeKey, targetLocation, label);
+            // Стартовый/конечный тайлы только для активного дневного расписания
+            // (у вариантов нет данных npc.Schedule для определения targetTile).
+            if (!useVariant)
+                DrawStepEndpoints(npc, keys, idx, timeKey, targetLocation, label);
         }
 
         /// <summary>
