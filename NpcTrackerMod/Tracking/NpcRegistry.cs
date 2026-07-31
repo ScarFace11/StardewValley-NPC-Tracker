@@ -122,12 +122,15 @@ namespace NpcTrackerMod.Tracking
 
         // ── Сброс ────────────────────────────────────────────────────────────────
 
-        /// <summary> Очищает всё состояние (вызывается в начале дня). </summary>
+        /// <summary>
+        /// Очищает дневное состояние (вызывается в начале каждого дня).
+        /// BlacklistedNpcs намеренно НЕ сбрасывается — пользовательский
+        /// чёрный список должен сохраняться между днями.
+        /// </summary>
         public void ClearDay()
         {
             TotalNpcList.Clear();
             CurrentNpcList.Clear();
-            BlacklistedNpcs.Clear();
             CurrentNpcName = null;
             SelectedNpcNames.Clear();
         }

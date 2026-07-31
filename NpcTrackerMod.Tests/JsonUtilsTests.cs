@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 using NpcTrackerMod.Scheduling;
 using Xunit;
 
@@ -57,67 +56,13 @@ namespace NpcTrackerMod.Tests
         {
             Assert.Equal(string.Empty, JsonUtils.RemoveComments(string.Empty));
         }
-    }
-}
-=======
-using NpcTrackerMod.Scheduling;
-using Xunit;
-
-namespace NpcTrackerMod.Tests
-{
-    public class JsonUtilsTests
-    {
-        [Fact]
-        public void RemoveComments_NoComments_ReturnsOriginal()
-        {
-            const string json = "{\"key\": \"value\"}";
-            Assert.Equal(json, JsonUtils.RemoveComments(json));
-        }
 
         [Fact]
-        public void RemoveComments_SingleLine_Removed()
+        public void RemoveComments_UrlInStringValue_NotStripped()
         {
-            const string input    = "{ \"key\": \"value\" // this is a comment\n}";
-            const string expected = "{ \"key\": \"value\" \n}";
-            Assert.Equal(expected, JsonUtils.RemoveComments(input));
-        }
-
-        [Fact]
-        public void RemoveComments_Multiline_Removed()
-        {
-            const string input    = "{ /* remove me */ \"key\": \"value\"}";
-            const string expected = "{  \"key\": \"value\"}";
-            Assert.Equal(expected, JsonUtils.RemoveComments(input));
-        }
-
-        [Fact]
-        public void RemoveComments_BothTypes_BothRemoved()
-        {
-            const string input =
-                "{\n" +
-                "  // line comment\n" +
-                "  \"key\": /* inline */ \"value\"\n" +
-                "}";
-
+            const string input    = "{ \"url\": \"https://example.com/path\" }";
             string result = JsonUtils.RemoveComments(input);
-
-            Assert.DoesNotContain("// line comment", result);
-            Assert.DoesNotContain("/* inline */",     result);
-            Assert.Contains("\"key\"",                result);
-            Assert.Contains("\"value\"",              result);
-        }
-
-        [Fact]
-        public void RemoveComments_NullInput_ReturnsNull()
-        {
-            Assert.Null(JsonUtils.RemoveComments(null));
-        }
-
-        [Fact]
-        public void RemoveComments_EmptyString_ReturnsEmpty()
-        {
-            Assert.Equal(string.Empty, JsonUtils.RemoveComments(string.Empty));
+            Assert.Contains("https://example.com/path", result);
         }
     }
 }
->>>>>>> a8036871776f7dafadaaadf146f5f7f6688c5cc9

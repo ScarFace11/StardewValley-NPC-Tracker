@@ -20,7 +20,36 @@ namespace NpcTrackerMod.Scheduling
         {
             var rawData = npc.getMasterScheduleRawData();
             if (rawData == null || rawData.Count == 0) return null;
+            return GetActiveKeyCore(npc, monitor, rawData);
+        }
 
+        /// <summary>
+        /// Возвращает только одну запись словаря, соответствующую активному ключу.
+        /// Если ключ не найден — возвращает всю коллекцию (поведение как раньше).
+        /// getMasterScheduleRawData() вызывается ровно один раз.
+        /// </summary>
+        public static Dictionary<string, string> GetActiveSchedule(NPC npc, IMonitor monitor)
+        {
+            var rawData = npc.getMasterScheduleRawData();
+            if (rawData == null || rawData.Count == 0)
+                return new Dictionary<string, string>();
+
+            // Передаём уже загруженный rawData, чтобы не вызывать getMasterScheduleRawData повторно.
+            string key = GetActiveKeyCore(npc, monitor, rawData);
+            if (key != null && rawData.TryGetValue(key, out string value))
+                return new Dictionary<string, string> { [key] = value };
+
+            return rawData;
+        }
+
+        // ── Ядро выбора ключа ────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Ищет активный ключ по переданному rawData — без повторного вызова игрового API.
+        /// </summary>
+        private static string GetActiveKeyCore(
+            NPC npc, IMonitor monitor, Dictionary<string, string> rawData)
+        {
             string season    = Game1.currentSeason ?? "spring";
             int    day       = Game1.dayOfMonth;
             bool   isRaining = Game1.isRaining || Game1.isLightning;
@@ -51,23 +80,6 @@ namespace NpcTrackerMod.Scheduling
                 $"используется '{fallback}'",
                 LogLevel.Debug);
             return fallback;
-        }
-
-        /// <summary>
-        /// Возвращает только одну запись словаря, соответствующую активному ключу.
-        /// Если ключ не найден — возвращает всю коллекцию (поведение как раньше).
-        /// </summary>
-        public static Dictionary<string, string> GetActiveSchedule(NPC npc, IMonitor monitor)
-        {
-            var rawData = npc.getMasterScheduleRawData();
-            if (rawData == null || rawData.Count == 0)
-                return new Dictionary<string, string>();
-
-            string key = GetActiveKey(npc, monitor);
-            if (key != null && rawData.TryGetValue(key, out string value))
-                return new Dictionary<string, string> { [key] = value };
-
-            return rawData;
         }
 
         // ── Генератор ключей-кандидатов (в порядке убывания приоритета) ───────────

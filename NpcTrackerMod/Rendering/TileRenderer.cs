@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
@@ -32,9 +33,12 @@ namespace NpcTrackerMod.Rendering
         /// <summary>Прозрачность тайлов маршрута (0.0–1.0). Синхронизируется с ModConfig.RouteAlpha.</summary>
         public float Alpha { get; set; } = 0.3f;
 
-        // Кеш тайловой сетки: пересчитывается только при смене локации
+        // Кеш тайловой сетки: хранит размеры карты, пересчитывается только при смене локации.
+        // Вместо списка всех тайлов храним только ширину/высоту и вычисляем видимый диапазон
+        // непосредственно в DrawGrid — это даёт O(видимые тайлы) вместо O(все тайлы).
         private string _cachedGridLocation;
-        private readonly List<Point> _cachedGridTiles = new List<Point>();
+        private int    _cachedGridWidth;
+        private int    _cachedGridHeight;
 
         public TileRenderer(GraphicsDevice graphicsDevice)
         {
@@ -109,28 +113,43 @@ namespace NpcTrackerMod.Rendering
 
         /// <summary>
         /// Рисует тайловую сетку для текущей локации.
-        /// Список тайлов кешируется при смене локации — не пересчитывается каждый кадр.
+        /// Рисуются только тайлы в пределах видимого вьюпорта —
+        /// O(видимые тайлы), а не O(все тайлы карты).
         /// </summary>
         public void DrawGrid(SpriteBatch batch, Vector2 cameraOffset)
         {
             string locName = Game1.currentLocation?.Name;
             if (locName != _cachedGridLocation)
             {
-                _cachedGridTiles.Clear();
                 _cachedGridLocation = locName;
                 if (Game1.currentLocation != null)
                 {
                     var map = Game1.currentLocation.Map.Layers[0];
-                    for (int x = 0; x < map.LayerWidth; x++)
-                        for (int y = 0; y < map.LayerHeight; y++)
-                            _cachedGridTiles.Add(new Point(x, y));
+                    _cachedGridWidth  = map.LayerWidth;
+                    _cachedGridHeight = map.LayerHeight;
+                }
+                else
+                {
+                    _cachedGridWidth  = 0;
+                    _cachedGridHeight = 0;
                 }
             }
 
-            foreach (var pt in _cachedGridTiles)
+            if (_cachedGridWidth == 0) return;
+
+            // Вычисляем диапазон видимых тайлов прямо из вьюпорта.
+            int vpLeft   = Math.Max(0, (int)(cameraOffset.X / TileSize));
+            int vpTop    = Math.Max(0, (int)(cameraOffset.Y / TileSize));
+            int vpRight  = Math.Min(_cachedGridWidth  - 1, (int)((cameraOffset.X + Game1.viewport.Width)  / TileSize) + 1);
+            int vpBottom = Math.Min(_cachedGridHeight - 1, (int)((cameraOffset.Y + Game1.viewport.Height) / TileSize) + 1);
+
+            for (int x = vpLeft; x <= vpRight; x++)
             {
-                var pos = new Vector2(pt.X * TileSize, pt.Y * TileSize) - cameraOffset;
-                DrawTileOutline(batch, pos, Color.Black);
+                for (int y = vpTop; y <= vpBottom; y++)
+                {
+                    var pos = new Vector2(x * TileSize, y * TileSize) - cameraOffset;
+                    DrawTileOutline(batch, pos, Color.Black);
+                }
             }
         }
 

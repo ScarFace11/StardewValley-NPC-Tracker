@@ -22,21 +22,21 @@ namespace NpcTrackerMod.Core
             if (npc?.Schedule == null || npc.Schedule.Count == 0)
                 return null;
 
-            int currentTime = Game1.timeOfDay;
-            int nextTime    = 0;
+            int  currentTime = Game1.timeOfDay;
+            int? nextTime    = null;
 
             foreach (int key in npc.Schedule.Keys.OrderBy(k => k))
             {
                 if (key > currentTime) { nextTime = key; break; }
             }
 
-            if (nextTime == 0) return null;
+            if (!nextTime.HasValue) return null;
 
-            var entry = npc.Schedule[nextTime];
+            var entry = npc.Schedule[nextTime.Value];
             return LocalizationHelper.Get(i18n, "tooltip.nextAt", new
             {
                 location = entry.targetLocationName ?? "?",
-                time     = RouteRenderer.FormatTime(nextTime)
+                time     = RouteRenderer.FormatTime(nextTime.Value)
             });
         }
     }

@@ -32,6 +32,11 @@ namespace NpcTrackerMod.Core
         public Dictionary<string, string> ActiveScheduleKeys { get; }
             = new Dictionary<string, string>();
 
+        // Кеш отсортированных временных ключей для пошагового режима.
+        // Инвалидируется в ClearDay — ключи не меняются в течение дня.
+        private readonly Dictionary<string, List<int>> _sortedStepKeyCache
+            = new Dictionary<string, List<int>>();
+
         public NpcPathStore(IMonitor monitor)
         {
             _monitor = monitor;
@@ -95,6 +100,7 @@ namespace NpcTrackerMod.Core
             DayPaths.Clear();
             TimedDayPaths.Clear();
             ActiveScheduleKeys.Clear();
+            _sortedStepKeyCache.Clear();
         }
 
         /// <summary> Полная очистка всех данных. </summary>
@@ -104,13 +110,14 @@ namespace NpcTrackerMod.Core
             GlobalPaths.Clear();
             TimedDayPaths.Clear();
             ActiveScheduleKeys.Clear();
+            _sortedStepKeyCache.Clear();
         }
 
         // ── Пошаговый доступ ─────────────────────────────────────────────────────
 
         /// <summary>
         /// Возвращает отсортированный список временных ключей дневного маршрута NPC.
-        /// Используется RouteRenderer и меню для пошагового просмотра.
+        /// Результат кешируется на весь день — создаётся не более одного раза на NPC.
         /// Пустой список означает, что тайминговых данных нет (fallback на DayPaths).
         /// </summary>
         public List<int> GetStepKeys(string npcName)
@@ -120,8 +127,12 @@ namespace NpcTrackerMod.Core
                 timedPath == null)
                 return new List<int>();
 
+            if (_sortedStepKeyCache.TryGetValue(npcName, out var cached))
+                return cached;
+
             var keys = new List<int>(timedPath.Keys);
             keys.Sort();
+            _sortedStepKeyCache[npcName] = keys;
             return keys;
         }
     }

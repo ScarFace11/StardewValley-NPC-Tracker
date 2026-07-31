@@ -20,10 +20,6 @@ namespace NpcTrackerMod.Scheduling
         private readonly NpcRegistry _registry;
         private readonly LocationMapper _mapper;
 
-        // Состояние текущего прохода по маршруту (сбрасывается после каждого NPC)
-        private string _lastLocationName;
-        private string _endLocationName;
-
         public ScheduleProcessor(
             IMonitor monitor,
             NpcPathStore store,
@@ -50,11 +46,14 @@ namespace NpcTrackerMod.Scheduling
             var totalPath = new Dictionary<string, HashSet<Point>>();
             var timedPath = new Dictionary<int, Dictionary<string, HashSet<Point>>>();
 
-            _lastLocationName = null;
+            // lastLocationName — локальная переменная, передаётся по ref в FilterRouteByLocation.
+            // Сохраняет, в какой локации закончился предыдущий сегмент маршрута, чтобы корректно
+            // определить принадлежность следующего сегмента при пересечении варпов.
+            string lastLocationName = null;
 
             foreach (var entry in npc.Schedule)
             {
-                var segments = FilterRouteByLocation(npc.currentLocation.Name, entry.Value.route);
+                var segments = FilterRouteByLocation(npc.currentLocation.Name, entry.Value.route, ref lastLocationName);
                 NpcPathStore.MergeSegments(totalPath, segments);
                 if (segments.Count > 0)
                     timedPath[entry.Key] = segments;
@@ -75,7 +74,6 @@ namespace NpcTrackerMod.Scheduling
             if (!string.IsNullOrEmpty(activeKey))
                 _store.ActiveScheduleKeys[npc.Name] = activeKey;
 
-            _lastLocationName = null;
             _store.AddPath(npc, _store.DayPaths, totalPath);
         }
 
@@ -101,6 +99,12 @@ namespace NpcTrackerMod.Scheduling
 
             var totalPath = new Dictionary<string, HashSet<Point>>();
 
+            // Состояние прохода по маршруту — локальные переменные, передаются по ref.
+            // Это гарантирует атомарность: исключение внутри одного ключа не загрязняет
+            // состояние для следующего ключа (в отличие от instance-полей).
+            string lastLocationName = null;
+            string endLocationName  = null;
+
             try
             {
                 foreach (var kvp in masterSchedule)
@@ -114,11 +118,15 @@ namespace NpcTrackerMod.Scheduling
 
                     try
                     {
-                        ProcessMasterScheduleEntry(npc, kvp.Key, kvp.Value, totalPath);
+                        ProcessMasterScheduleEntry(npc, kvp.Key, kvp.Value, totalPath,
+                            ref lastLocationName, ref endLocationName);
                     }
                     catch (Exception ex)
                     {
                         _monitor.Log($"Ошибка обработки ключа '{kvp.Key}' для '{npc.Name}': {ex.Message}", LogLevel.Error);
+                        // Сбрасываем состояние прохода, чтобы следующий ключ начался чисто.
+                        lastLocationName = null;
+                        endLocationName  = null;
                     }
                 }
             }
@@ -127,24 +135,31 @@ namespace NpcTrackerMod.Scheduling
                 _monitor.Log($"Ошибка глобального маршрута '{npc.Name}': {ex.Message}", LogLevel.Error);
             }
 
-            _lastLocationName = null;
             _store.AddPath(npc, _store.GlobalPaths, totalPath);
         }
 
         // ── Внутренняя обработка ─────────────────────────────────────────────────
 
+        /// <summary>
+        /// Обрабатывает один ключ мастер-расписания (например, "spring_Mon").
+        /// <paramref name="lastLocationName"/> и <paramref name="endLocationName"/> передаются
+        /// по ref, чтобы состояние прохода не хранилось в полях объекта —
+        /// это делает метод безопасным при исключениях и читаемым при отладке.
+        /// </summary>
         private void ProcessMasterScheduleEntry(
             NPC npc,
             string key,
             string rawData,
-            Dictionary<string, HashSet<Point>> totalPath)
+            Dictionary<string, HashSet<Point>> totalPath,
+            ref string lastLocationName,
+            ref string endLocationName)
         {
             var slots = rawData.Split('/');
 
             // Используем TilePoint самого NPC — он всегда валиден, в отличие от поиска
             // персонажа в characters (NPC может ещё не переместиться на DayStarted).
-            string startLocName = _endLocationName ?? npc.currentLocation?.Name;
-            _endLocationName = null;
+            string startLocName = endLocationName ?? npc.currentLocation?.Name;
+            endLocationName = null;
 
             if (!Game1.locations.Any(loc => loc.Name == startLocName))
             {
@@ -156,7 +171,7 @@ namespace NpcTrackerMod.Scheduling
             int npcX = npc.TilePoint.X;
             int npcY = npc.TilePoint.Y;
 
-            _lastLocationName = null;
+            lastLocationName = null;
 
             foreach (var slot in slots)
             {
@@ -187,7 +202,7 @@ namespace NpcTrackerMod.Scheduling
                             if (pathDesc?.route != null)
                             {
                                 NpcPathStore.MergeSegments(totalPath,
-                                    FilterRouteByLocation(npc.currentLocation?.Name, pathDesc.route));
+                                    FilterRouteByLocation(npc.currentLocation?.Name, pathDesc.route, ref lastLocationName));
                             }
 
                             lastLocation = homeMap;
@@ -209,7 +224,7 @@ namespace NpcTrackerMod.Scheduling
 
                 if (parts.Length <= 2) continue;
 
-                ScheduleEntryParser.Parse(parts, _lastLocationName,
+                ScheduleEntryParser.Parse(parts, lastLocationName,
                     out string time, out string locationName,
                     out int x, out int y,
                     out int facingDir, out string endBehavior, out string endMessage);
@@ -229,7 +244,7 @@ namespace NpcTrackerMod.Scheduling
                     if (pathDesc?.route != null)
                     {
                         NpcPathStore.MergeSegments(totalPath,
-                            FilterRouteByLocation(npc.currentLocation?.Name, pathDesc.route));
+                            FilterRouteByLocation(npc.currentLocation?.Name, pathDesc.route, ref lastLocationName));
                         lastLocation = locationName;
                         npcX = x;
                         npcY = y;
@@ -248,15 +263,18 @@ namespace NpcTrackerMod.Scheduling
 
             // Сохраняем конечную локацию — следующий вызов ProcessMasterScheduleEntry
             // (при итерации по нескольким ключам) начнёт именно отсюда.
-            _endLocationName = lastLocation;
+            endLocationName = lastLocation;
         }
 
         /// <summary>
         /// Разбивает стек точек маршрута на сегменты по локациям.
         /// Разрыв смежности (> 1 тайл) = переход через варп в новую локацию.
+        /// <paramref name="lastLocationName"/> передаётся по ref: метод читает его как
+        /// начальную локацию и обновляет при каждом обнаруженном варпе, чтобы вызывающий
+        /// код мог использовать итоговое значение для следующего вызова.
         /// </summary>
         public Dictionary<string, HashSet<Point>> FilterRouteByLocation(
-            string startLocation, Stack<Point> points)
+            string startLocation, Stack<Point> points, ref string lastLocationName)
         {
             var result = new Dictionary<string, HashSet<Point>>();
 
@@ -268,17 +286,19 @@ namespace NpcTrackerMod.Scheduling
                 return result;
             }
 
-            if (_lastLocationName == null)
-                _lastLocationName = startLocation;
+            if (lastLocationName == null)
+                lastLocationName = startLocation;
 
-            var currentSegment = new HashSet<Point>();
-            var prevCoord = Point.Zero;
+            var  currentSegment = new HashSet<Point>();
+            var  prevCoord      = Point.Zero;
+            bool firstPoint     = true;  // явный флаг вместо Point.Zero как sentinel
 
             foreach (var pt in points)
             {
-                if (prevCoord == Point.Zero)
+                if (firstPoint)
                 {
-                    prevCoord = pt;
+                    firstPoint = false;
+                    prevCoord  = pt;
                     currentSegment.Add(pt);
                     continue;
                 }
@@ -293,16 +313,16 @@ namespace NpcTrackerMod.Scheduling
                 }
                 else
                 {
-                    AppendSegment(result, _lastLocationName, currentSegment);
+                    AppendSegment(result, lastLocationName, currentSegment);
                     currentSegment = new HashSet<Point>();
-                    string dest = _mapper.GetDestination(_lastLocationName, prevCoord);
-                    if (dest != null) _lastLocationName = dest;
+                    string dest = _mapper.GetDestination(lastLocationName, prevCoord);
+                    if (dest != null) lastLocationName = dest;
                     prevCoord = pt;
                 }
             }
 
             if (currentSegment.Count > 0)
-                AppendSegment(result, _lastLocationName, currentSegment);
+                AppendSegment(result, lastLocationName, currentSegment);
 
             return result;
         }
