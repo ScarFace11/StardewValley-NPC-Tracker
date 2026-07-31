@@ -119,27 +119,13 @@ namespace NpcTrackerMod.UI
 
                 if (npc?.Schedule != null && npc.Schedule.Count > 0)
                 {
-                    int currentTime = Game1.timeOfDay;
-                    int nextTime    = 0;
-
                     foreach (int t in npc.Schedule.Keys.OrderBy(k => k))
                     {
                         var entry = npc.Schedule[t];
-                        string loc = entry.targetLocationName ?? "?";
-                        schedule.Add((RouteRenderer.FormatTime(t), loc));
-                        if (t > currentTime && nextTime == 0)
-                            nextTime = t;
+                        schedule.Add((RouteRenderer.FormatTime(t), entry.targetLocationName ?? "?"));
                     }
 
-                    if (nextTime > 0)
-                    {
-                        var ne = npc.Schedule[nextTime];
-                        nextDest = T("tooltip.nextAt", new
-                        {
-                            location = ne.targetLocationName ?? "?",
-                            time     = RouteRenderer.FormatTime(nextTime)
-                        });
-                    }
+                    nextDest = Core.ScheduleDisplayHelper.GetNextDestinationLabel(npc, _i18n);
                 }
 
                 _registry.NpcModSource.TryGetValue(npcName, out string source);

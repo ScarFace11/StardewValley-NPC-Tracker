@@ -256,25 +256,7 @@ namespace NpcTrackerMod
             try
             {
                 var npc = _registry.GameNpcs?.FirstOrDefault(n => n?.Name == npcName);
-                if (npc?.Schedule == null || npc.Schedule.Count == 0) return null;
-
-                int currentTime = Game1.timeOfDay;
-                int nextTime = 0;
-
-                foreach (int key in npc.Schedule.Keys.OrderBy(k => k))
-                {
-                    if (key > currentTime) { nextTime = key; break; }
-                }
-
-                if (nextTime == 0) return null;
-
-                var entry = npc.Schedule[nextTime];
-                string loc = entry.targetLocationName ?? "?";
-                return Helper.Translation.Get("tooltip.nextAt", new
-                {
-                    location = loc,
-                    time     = RouteRenderer.FormatTime(nextTime)
-                }).ToString();
+                return ScheduleDisplayHelper.GetNextDestinationLabel(npc, Helper.Translation);
             }
             catch (Exception ex)
             {
