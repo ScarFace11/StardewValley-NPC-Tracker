@@ -70,7 +70,7 @@ namespace NpcTrackerMod
             _tileRenderer = new TileRenderer(Game1.graphics.GraphicsDevice);
             _tileRenderer.Alpha = _config.RouteAlpha;
             _routeRenderer = new RouteRenderer(Monitor, _state, _pathStore, _tileRenderer, _config, Helper.Translation);
-            _tracker = new NpcTracker(_state, _registry, _scheduleProcessor, _routeRenderer, _tileRenderer);
+            _tracker = new NpcTracker(_state, _registry, _routeRenderer, _tileRenderer);
 
             // Подписки на события, требующие инициализированного рендерера
             Helper.Events.Input.ButtonPressed += OnButtonPressed;
