@@ -39,22 +39,6 @@ namespace NpcTrackerMod.Scheduling
         // ── Публичный API ────────────────────────────────────────────────────────
 
         /// <summary>
-        /// Возвращает NPC, которых нужно визуализировать в текущем кадре.
-        /// </summary>
-        public IEnumerable<NPC> GetNpcsToTrack(bool allLocations, HashSet<string> tracked)
-        {
-            if (!allLocations)
-                return Game1.currentLocation?.characters
-                    .Where(n => tracked.Contains(n.Name))
-                    ?? Enumerable.Empty<NPC>();
-
-            return Game1.locations
-                .Where(loc => loc?.characters != null)
-                .SelectMany(loc => loc.characters)
-                .Where(n => n != null && tracked.Contains(n.Name));
-        }
-
-        /// <summary>
         /// Строит дневной маршрут NPC из game.Schedule (предвычисленного движком).
         /// Если расписание пустое — делегирует в BuildGlobalRoute.
         /// </summary>

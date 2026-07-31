@@ -4,7 +4,6 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using NpcTrackerMod.Core;
 using NpcTrackerMod.Rendering;
-using NpcTrackerMod.Scheduling;
 using StardewValley;
 
 namespace NpcTrackerMod.Tracking
@@ -15,24 +14,21 @@ namespace NpcTrackerMod.Tracking
     /// </summary>
     public class NpcTracker
     {
-        private readonly ModState _state;
+        private readonly ModState    _state;
         private readonly NpcRegistry _registry;
-        private readonly ScheduleProcessor _processor;
         private readonly RouteRenderer _routeRenderer;
-        private readonly TileRenderer _tileRenderer;
+        private readonly TileRenderer  _tileRenderer;
 
         public NpcTracker(
-            ModState state,
+            ModState    state,
             NpcRegistry registry,
-            ScheduleProcessor processor,
             RouteRenderer routeRenderer,
-            TileRenderer tileRenderer)
+            TileRenderer  tileRenderer)
         {
-            _state = state;
-            _registry = registry;
-            _processor = processor;
+            _state         = state;
+            _registry      = registry;
             _routeRenderer = routeRenderer;
-            _tileRenderer = tileRenderer;
+            _tileRenderer  = tileRenderer;
         }
 
         /// <summary>
@@ -40,10 +36,8 @@ namespace NpcTrackerMod.Tracking
         /// </summary>
         public void DrawPaths(SpriteBatch spriteBatch, Vector2 cameraOffset)
         {
-            // В глобальном режиме нужны все NPC (не только те, что сейчас в текущей локации),
-            // чтобы показать весь набор маршрутов через текущую карту.
             bool allLocations = _state.SwitchTargetLocations || _state.SwitchGlobalNpcPath;
-            foreach (var npc in _processor.GetNpcsToTrack(allLocations, _registry.TotalNpcList))
+            foreach (var npc in GetNpcsToTrack(allLocations, _registry.TotalNpcList))
             {
                 if (npc == null || string.IsNullOrWhiteSpace(npc.Name)) continue;
                 if (!_state.SwitchTargetNPC || _registry.SelectedNpcNames.Contains(npc.Name))
@@ -55,6 +49,24 @@ namespace NpcTrackerMod.Tracking
 
             _tileRenderer.DrawAll(spriteBatch, cameraOffset);
             _state.SwitchGetNpcPath = false;
+        }
+
+        /// <summary>
+        /// Возвращает NPC, которых нужно визуализировать в текущем кадре.
+        /// В обычном режиме — только NPC текущей локации.
+        /// В режиме всех локаций / глобального маршрута — NPC из всех локаций.
+        /// </summary>
+        private static IEnumerable<NPC> GetNpcsToTrack(bool allLocations, HashSet<string> tracked)
+        {
+            if (!allLocations)
+                return Game1.currentLocation?.characters
+                    .Where(n => tracked.Contains(n.Name))
+                    ?? Enumerable.Empty<NPC>();
+
+            return Game1.locations
+                .Where(loc => loc?.characters != null)
+                .SelectMany(loc => loc.characters)
+                .Where(n => n != null && tracked.Contains(n.Name));
         }
     }
 }

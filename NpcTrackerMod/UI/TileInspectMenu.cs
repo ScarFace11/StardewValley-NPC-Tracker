@@ -84,12 +84,8 @@ namespace NpcTrackerMod.UI
         // ── Локализация ───────────────────────────────────────────────────────────
 
         /// <summary> Возвращает перевод по ключу с необязательными токенами. </summary>
-        private string T(string key, object tokens = null)
-        {
-            if (_i18n == null) return key;
-            var t = tokens != null ? _i18n.Get(key, tokens) : _i18n.Get(key);
-            return t.HasValue() ? t.ToString() : key;
-        }
+        private string T(string key, object tokens = null) =>
+            LocalizationHelper.Get(_i18n, key, tokens);
 
         // ── Инициализация ─────────────────────────────────────────────────────────
 
