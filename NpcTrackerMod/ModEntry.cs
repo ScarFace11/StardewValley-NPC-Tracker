@@ -126,10 +126,22 @@ namespace NpcTrackerMod
         {
             if (!Context.IsWorldReady) return;
 
-            // Пока поиск NPC в фокусе — подавляем все кнопки, чтобы игровые
-            // горячие клавиши (чат, инвентарь и т.д.) не срабатывали при вводе.
+            // Пока поиск NPC в фокусе — подавляем только игровые горячие клавиши,
+            // но не системные (Escape) и не клики мыши
             if (Game1.activeClickableMenu is TrackingMenu tm && tm.IsSearchFocused)
             {
+                // Пропускаем системные кнопки и мышь
+                if (e.Button == SButton.Escape ||
+                    e.Button == SButton.MouseLeft ||
+                    e.Button == SButton.MouseRight ||
+                    e.Button == SButton.Enter ||
+                    e.Button == SButton.Back ) // Enter тоже нужен для подтверждения
+                {
+                    return;
+                }
+
+                // Подавляем только буквенно-цифровые и специальные клавиши,
+                // которые могут открыть чат, инвентарь и т.д.
                 Helper.Input.Suppress(e.Button);
                 return;
             }
