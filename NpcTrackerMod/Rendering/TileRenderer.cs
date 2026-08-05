@@ -98,12 +98,25 @@ namespace NpcTrackerMod.Rendering
 
         // ── Отрисовка ────────────────────────────────────────────────────────────
 
-        /// <summary> Рисует все зарегистрированные цветные тайлы. </summary>
+        /// <summary>
+        /// Рисует зарегистрированные цветные тайлы, видимые в текущем вьюпорте.
+        /// Тайлы за пределами экрана отсекаются — O(видимые), а не O(все зарегистрированные).
+        /// </summary>
         public void DrawAll(SpriteBatch batch, Vector2 cameraOffset)
         {
+            // Границы вьюпорта в тайловых координатах (+1 запас по краям).
+            int vpLeft   = (int)(cameraOffset.X / TileSize) - 1;
+            int vpTop    = (int)(cameraOffset.Y / TileSize) - 1;
+            int vpRight  = (int)((cameraOffset.X + Game1.viewport.Width)  / TileSize) + 1;
+            int vpBottom = (int)((cameraOffset.Y + Game1.viewport.Height) / TileSize) + 1;
+
             foreach (var kvp in TileStates)
             {
-                var pos = new Vector2(kvp.Key.X * TileSize, kvp.Key.Y * TileSize) - cameraOffset;
+                int tx = kvp.Key.X;
+                int ty = kvp.Key.Y;
+                if (tx < vpLeft || tx > vpRight || ty < vpTop || ty > vpBottom) continue;
+
+                var pos = new Vector2(tx * TileSize, ty * TileSize) - cameraOffset;
                 var color = NpcPositionColors.TryGetValue(kvp.Key, out var tmp)
                     ? tmp
                     : kvp.Value.Current;

@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using Microsoft.Xna.Framework;
 using NpcTrackerMod.Core;
 using NpcTrackerMod.Rendering;
@@ -30,6 +29,7 @@ namespace NpcTrackerMod
         private CustomScheduleLoader _scheduleLoader;
         private TileRenderer _tileRenderer;
         private RouteRenderer _routeRenderer;
+        private TooltipRenderer _tooltipRenderer;
         private NpcTracker _tracker;
         private ModConfig _config;
 
@@ -70,6 +70,7 @@ namespace NpcTrackerMod
             _tileRenderer = new TileRenderer(Game1.graphics.GraphicsDevice);
             _tileRenderer.Alpha = _config.RouteAlpha;
             _routeRenderer = new RouteRenderer(Monitor, _state, _pathStore, _tileRenderer, _config, Helper.Translation);
+            _tooltipRenderer = new TooltipRenderer(_tileRenderer, _registry, _config, Helper.Translation, Monitor);
             _tracker = new NpcTracker(_state, _registry, _routeRenderer, _tileRenderer);
 
             // Подписки на события, требующие инициализированного рендерера
@@ -135,7 +136,7 @@ namespace NpcTrackerMod
                     e.Button == SButton.MouseLeft ||
                     e.Button == SButton.MouseRight ||
                     e.Button == SButton.Enter ||
-                    e.Button == SButton.Back ) // Enter тоже нужен для подтверждения
+                    e.Button == SButton.Back )
                 {
                     return;
                 }
@@ -166,8 +167,9 @@ namespace NpcTrackerMod
                 if (_tileRenderer.TileOwners.TryGetValue(tile, out var owners) && owners.Count > 0)
                 {
                     Game1.activeClickableMenu = new TileInspectMenu(
-                        Monitor, _state, _registry, _tileRenderer,
-                        tile, owners, _registry.GameNpcs, Helper.Translation);
+                        Monitor, _state, _registry,
+                        tile, owners, _registry.GameNpcs, Helper.Translation,
+                        ToggleNpc);
 
                     Helper.Input.Suppress(e.Button);
                     Game1.playSound("smallSelect");
@@ -189,32 +191,8 @@ namespace NpcTrackerMod
                 if (_state.DisplayGrid)
                     _tileRenderer.DrawGrid(batch, camera);
 
-                // Тултип при наведении на тайл маршрута
-                int tx = (int)((Game1.viewport.X + Game1.getMouseX()) / Game1.tileSize);
-                int ty = (int)((Game1.viewport.Y + Game1.getMouseY()) / Game1.tileSize);
-                var hovered = new Point(tx, ty);
-
-                if (_tileRenderer.TileOwners.TryGetValue(hovered, out var owners) && owners.Count > 0)
-                {
-                    var sb = new StringBuilder();
-                    foreach (var o in owners)
-                    {
-                        if (sb.Length > 0) sb.Append('\n');
-                        sb.Append(string.IsNullOrEmpty(o.TimeInfo)
-                            ? o.NpcName
-                            : $"{o.NpcName} ({o.TimeInfo})");
-
-                        // Следующая точка расписания
-                        string nextHint = GetNextScheduleLabel(o.NpcName);
-                        if (nextHint != null)
-                            sb.Append($"\n  {nextHint}");
-                    }
-
-                    // Подсказка: клик открывает инспектор
-                    sb.Append('\n');
-                    sb.Append(Helper.Translation.Get("tooltip.inspector", new { key = _config.SelectNpcKey }));
-                    IClickableMenu.drawHoverText(batch, sb.ToString(), Game1.smallFont);
-                }
+                // Тултип при наведении на тайл маршрута (логика в TooltipRenderer)
+                _tooltipRenderer.Draw(batch);
             }
             catch (Exception ex)
             {
@@ -230,6 +208,7 @@ namespace NpcTrackerMod
             _previousLocationName = Game1.player.currentLocation.Name;
             _state.SwitchGetNpcPath = true;
             _state.NpcCount = Game1.player.currentLocation.characters.Count();
+            _tracker.InvalidateNpcCache();
         }
 
         private void OnUpdateTicked(object sender, UpdateTickedEventArgs e)
@@ -254,6 +233,7 @@ namespace NpcTrackerMod
             _tileRenderer.Clear();
             _state.SwitchGetNpcPath = true;
             _state.NpcCount = npcCount;
+            _tracker.InvalidateNpcCache();
 
             _registry.RefreshCurrentNpcList();
         }
@@ -292,22 +272,28 @@ namespace NpcTrackerMod
             }
         }
 
+        // ── Управление выбором NPC ────────────────────────────────────────────────
+
         /// <summary>
-        /// Возвращает локализованную строку «→ Saloon в 12:00» — следующая запись расписания NPC
-        /// после текущего игрового времени. Null, если данных нет или день уже закончился.
+        /// Переключает NPC в множестве выбранных и обновляет состояние для перерисовки.
+        /// Вызывается из TileInspectMenu через callback — бизнес-логика выбора
+        /// не должна жить в UI.
         /// </summary>
-        private string GetNextScheduleLabel(string npcName)
+        private void ToggleNpc(string npcName)
         {
-            try
+            if (_registry.SelectedNpcNames.Contains(npcName))
+                _registry.SelectedNpcNames.Remove(npcName);
+            else
             {
-                var npc = _registry.GameNpcs?.FirstOrDefault(n => n?.Name == npcName);
-                return ScheduleDisplayHelper.GetNextDestinationLabel(npc, Helper.Translation);
+                _registry.SelectedNpcNames.Add(npcName);
+                _registry.CurrentNpcName = npcName;
             }
-            catch (Exception ex)
-            {
-                Monitor.Log($"GetNextScheduleLabel({npcName}): {ex.Message}", LogLevel.Trace);
-                return null;
-            }
+
+            _state.SwitchTargetNPC  = _registry.SelectedNpcNames.Count > 0;
+            _tileRenderer.Clear();
+            _registry.CurrentNpcList.Clear();
+            _state.SwitchGetNpcPath = true;
+            _state.SwitchListFull   = false;
         }
 
         // ── Утилиты ───────────────────────────────────────────────────────────────

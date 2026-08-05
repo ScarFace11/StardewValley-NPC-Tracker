@@ -50,6 +50,10 @@ namespace NpcTrackerMod.Core
         private readonly Dictionary<string, Dictionary<string, List<int>>> _variantStepKeyCache
             = new Dictionary<string, Dictionary<string, List<int>>>();
 
+        // Разделяемый пустой список — возвращается вместо new List<int>() при отсутствии данных.
+        // Только для чтения: вызывающий код не должен его изменять.
+        private static readonly List<int> EmptyKeys = new List<int>(0);
+
         public NpcPathStore(IMonitor monitor)
         {
             _monitor = monitor;

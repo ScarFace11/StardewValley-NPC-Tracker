@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using Microsoft.Xna.Framework;
 using NpcTrackerMod.Core;
 using StardewModdingAPI;
@@ -30,6 +29,16 @@ namespace NpcTrackerMod.Rendering
         private static readonly Color StepStartColor = new Color(30, 185, 215);  // холодный — откуда стартует
         private static readonly Color StepEndColor   = new Color(215, 100, 0);   // тёплый — куда придёт
 
+        // Кеш распарсенных цветов из конфига — пересчитывается только при смене строки конфига,
+        // а не при каждом вызове ParseColor() на каждый тайл каждый кадр.
+        private string _cachedRouteColorName;
+        private Color  _cachedRouteColor = Color.Green;
+        private string _cachedPositionColorName;
+        private Color  _cachedPositionColor = Color.Blue;
+
+        // Кеш строки локализации — не нужно обращаться к i18n каждый кадр на каждого NPC.
+        private string _hereNowLabel;
+
         public RouteRenderer(
             IMonitor monitor,
             ModState state,
@@ -51,6 +60,48 @@ namespace NpcTrackerMod.Rendering
         /// <summary> Возвращает перевод по ключу с необязательными токенами. </summary>
         private string T(string key, object tokens = null) =>
             LocalizationHelper.Get(_i18n, key, tokens);
+
+        // ── Кеш цветов ────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Возвращает кешированный цвет маршрута.
+        /// Перепарсивает только если строка конфига изменилась.
+        /// </summary>
+        private Color RouteColor
+        {
+            get
+            {
+                if (_config.RouteColor != _cachedRouteColorName)
+                {
+                    _cachedRouteColorName = _config.RouteColor;
+                    _cachedRouteColor     = ModConfig.ParseColor(_config.RouteColor, Color.Green);
+                }
+                return _cachedRouteColor;
+            }
+        }
+
+        /// <summary>
+        /// Возвращает кешированный цвет позиции NPC.
+        /// Перепарсивает только если строка конфига изменилась.
+        /// </summary>
+        private Color PositionColor
+        {
+            get
+            {
+                if (_config.PositionColor != _cachedPositionColorName)
+                {
+                    _cachedPositionColorName = _config.PositionColor;
+                    _cachedPositionColor     = ModConfig.ParseColor(_config.PositionColor, Color.Blue);
+                }
+                return _cachedPositionColor;
+            }
+        }
+
+        /// <summary>
+        /// Возвращает кешированную строку "здесь сейчас".
+        /// Инициализируется один раз — i18n не меняется во время сессии.
+        /// </summary>
+        private string HereNowLabel => _hereNowLabel ?? (_hereNowLabel = T("route.hereNow"));
 
         // ── Публичный API ────────────────────────────────────────────────────────
 
@@ -85,12 +136,14 @@ namespace NpcTrackerMod.Rendering
                 }
                 else if (_state.TimeFilter >= 0 &&
                          _store.TimedDayPaths.TryGetValue(npc.Name, out var timedPath) &&
-                         timedPath.Any())
+                         timedPath.Count > 0)
                 {
                     _timedPathBuffer.Clear();
                     int lastTime = -1;
-                    foreach (var kvp in timedPath.Where(t => t.Key <= _state.TimeFilter))
+                    // Обычный цикл вместо LINQ-Where — нет аллокаций каждый кадр.
+                    foreach (var kvp in timedPath)
                     {
+                        if (kvp.Key > _state.TimeFilter) continue;
                         foreach (var loc in kvp.Value)
                         {
                             if (!_timedPathBuffer.TryGetValue(loc.Key, out var pts))
@@ -125,9 +178,10 @@ namespace NpcTrackerMod.Rendering
 
                 if (pathData.TryGetValue(targetLocation, out var tileSet))
                 {
+                    var routeColor = RouteColor;
                     foreach (var coord in tileSet)
                     {
-                        _tiles.MarkTile(coord, ModConfig.ParseColor(_config.RouteColor, Color.Green), 2);
+                        _tiles.MarkTile(coord, routeColor, 2);
                         // timeLabel остаётся null для обычных маршрутов —
                         // тултип покажет только имя NPC без лишней метки
                         _tiles.RegisterOwner(coord, npc.Name, timeLabel);
@@ -158,8 +212,8 @@ namespace NpcTrackerMod.Rendering
                 _tiles.RestorePosition(prev);
 
             _state.NpcPreviousPositions[name] = currentTile;
-            _tiles.MarkNpcPosition(currentTile, ModConfig.ParseColor(_config.PositionColor, Color.Blue), 1);
-            _tiles.RegisterOwner(currentTile, name, T("route.hereNow"));
+            _tiles.MarkNpcPosition(currentTile, PositionColor, 1);
+            _tiles.RegisterOwner(currentTile, name, HereNowLabel);
         }
 
         // ── Утилита ───────────────────────────────────────────────────────────────
@@ -221,9 +275,10 @@ namespace NpcTrackerMod.Rendering
 
                 if (fallback.TryGetValue(targetLoc, out var fallbackTiles))
                 {
+                    var routeColor = RouteColor;
                     foreach (var coord in fallbackTiles)
                     {
-                        _tiles.MarkTile(coord, ModConfig.ParseColor(_config.RouteColor, Color.Green), 2);
+                        _tiles.MarkTile(coord, routeColor, 2);
                         _tiles.RegisterOwner(coord, npc.Name, null);
                     }
                 }
@@ -258,9 +313,10 @@ namespace NpcTrackerMod.Rendering
 
             // Метка для тултипа: время и порядковый номер шага.
             string label = $"{FormatTime(timeKey)}  ({idx + 1}/{keys.Count})";
+            var stepRouteColor = RouteColor;
             foreach (var coord in tileSet)
             {
-                _tiles.MarkTile(coord, ModConfig.ParseColor(_config.RouteColor, Color.Green), 2);
+                _tiles.MarkTile(coord, stepRouteColor, 2);
                 _tiles.RegisterOwner(coord, npc.Name, label);
             }
 

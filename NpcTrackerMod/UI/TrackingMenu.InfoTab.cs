@@ -1,3 +1,5 @@
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using StardewModdingAPI;
 using Microsoft.Xna.Framework;
@@ -36,7 +38,7 @@ namespace NpcTrackerMod.UI
 
             // Статистика NPC
             DrawSectionHeader(b, T("info.npcStats"), x, y); y += 36;
-            DrawKV(b, T("info.tracked"),    _registry.TotalNpcList.Count.ToString(), x, ref y);
+            DrawKV(b, T("info.tracked"), _registry.TotalNpcList.Count.ToString(), x, ref y);
             DrawKV(b, T("info.inLocation"), (Game1.currentLocation?.characters.Count ?? 0).ToString(), x, ref y);
             DrawKV(b, T("info.selected"),
                 _state.SwitchTargetNPC && _registry.SelectedNpcNames.Count > 0
@@ -58,12 +60,15 @@ namespace NpcTrackerMod.UI
             // Источники NPC
             DrawSectionHeader(b, T("info.bySource"), x, y); y += 36;
 
-            var groups = _registry.NpcModSource
-                .GroupBy(kv => kv.Value)
-                .OrderBy(g => g.Key)
-                .ToList();
+            // Пересчитываем группировку только при изменении состава источников,
+            // а не каждый кадр пока открыто меню.
+            if (_sourceGroupCache == null || _sourceGroupCacheCount != _registry.NpcModSource.Count)
+            {
+                _sourceGroupCache = BuildSourceGroups();
+                _sourceGroupCacheCount = _registry.NpcModSource.Count;
+            }
 
-            if (groups.Count == 0)
+            if (_sourceGroupCache.Count == 0)
             {
                 Utility.drawTextWithShadow(b, T("info.noData"), Game1.smallFont,
                     new Vector2(x, y), Color.Gray);
@@ -71,8 +76,9 @@ namespace NpcTrackerMod.UI
             }
             else
             {
-                foreach (var g in groups)
-                    DrawKV(b, g.Key, $"{g.Count()} NPC", x, ref y);
+                // Используем Item1 и Item2 для доступа к полям кортежа
+                foreach (var g in _sourceGroupCache)
+                    DrawKV(b, g.Item1, $"{g.Item2} NPC", x, ref y);
             }
 
             DrawDivider(b, y + 8); y += 24;
@@ -80,6 +86,30 @@ namespace NpcTrackerMod.UI
             DrawSectionHeader(b, T("info.tip"), x, y); y += 32;
             Utility.drawTextWithShadow(b, T("info.tipText"), Game1.smallFont,
                 new Vector2(x, y), new Color(120, 110, 90));
+        }
+
+        /// <summary>
+        /// Строит список пар (источник, количество NPC) для вкладки «Инфо».
+        /// Вызывается только при изменении NpcModSource, а не каждый кадр.
+        /// </summary>
+        private List<(string Source, int Count)> BuildSourceGroups()
+        {
+            var dict = new Dictionary<string, int>();
+            foreach (var kvp in _registry.NpcModSource)
+            {
+                if (dict.TryGetValue(kvp.Value, out int cnt))
+                    dict[kvp.Value] = cnt + 1;
+                else
+                    dict[kvp.Value] = 1;
+            }
+
+            var list = new List<(string Source, int Count)>(dict.Count);
+            foreach (var kvp in dict)
+                list.Add((kvp.Key, kvp.Value));
+
+            // Сортируем по имени источника без LINQ-аллокаций.
+            list.Sort((a, b) => string.Compare(a.Source, b.Source, StringComparison.Ordinal));
+            return list;
         }
     }
 }

@@ -63,6 +63,11 @@ namespace NpcTrackerMod.UI
         private int    _positionColorIndex;
         private bool   _draggingAlpha;
 
+        // Кеш группировки NPC по источникам (вкладка «Инфо»).
+        // Пересчитывается только при изменении состава источников, а не каждый кадр.
+        private List<(string Source, int Count)> _sourceGroupCache;
+        private int _sourceGroupCacheCount = -1;
+
         // Кнопка закрытия
         private ClickableTextureComponent _closeBtn;
 

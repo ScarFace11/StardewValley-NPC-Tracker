@@ -17,6 +17,7 @@ namespace NpcTrackerMod.UI
     /// Открывается по клику на любой тайл, через который проходит хотя бы один NPC.
     /// Отображает карточки всех NPC на тайле с расписанием, источником мода
     /// и кнопками выбора/снятия.
+    /// Бизнес-логика переключения NPC вынесена в ModEntry через callback <see cref="_onToggleNpc"/>.
     /// </summary>
     public class TileInspectMenu : IClickableMenu
     {
@@ -39,8 +40,13 @@ namespace NpcTrackerMod.UI
         private readonly IMonitor _monitor;
         private readonly ModState _state;
         private readonly NpcRegistry _registry;
-        private readonly TileRenderer _tiles;
         private readonly ITranslationHelper _i18n;
+
+        /// <summary>
+        /// Callback, переключающий NPC в множестве выбранных.
+        /// Реализован в ModEntry — бизнес-логика выбора не должна жить в UI.
+        /// </summary>
+        private readonly Action<string> _onToggleNpc;
 
         // ── Данные ────────────────────────────────────────────────────────────────
         private readonly Point _tile;
@@ -62,19 +68,19 @@ namespace NpcTrackerMod.UI
             IMonitor monitor,
             ModState state,
             NpcRegistry registry,
-            TileRenderer tiles,
             Point tile,
             List<(string NpcName, string TimeInfo)> owners,
             List<NPC> gameNpcs,
-            ITranslationHelper i18n = null)
+            ITranslationHelper i18n = null,
+            Action<string> onToggleNpc = null)
             : base(0, 0, BOX_W, 0)
         {
-            _monitor  = monitor  ?? throw new ArgumentNullException(nameof(monitor));
-            _state    = state    ?? throw new ArgumentNullException(nameof(state));
-            _registry = registry ?? throw new ArgumentNullException(nameof(registry));
-            _tiles    = tiles    ?? throw new ArgumentNullException(nameof(tiles));
-            _i18n     = i18n;
-            _tile     = tile;
+            _monitor     = monitor  ?? throw new ArgumentNullException(nameof(monitor));
+            _state       = state    ?? throw new ArgumentNullException(nameof(state));
+            _registry    = registry ?? throw new ArgumentNullException(nameof(registry));
+            _i18n        = i18n;
+            _tile        = tile;
+            _onToggleNpc = onToggleNpc;
 
             _npcData = BuildNpcData(owners, gameNpcs ?? new List<NPC>());
 
@@ -417,23 +423,13 @@ namespace NpcTrackerMod.UI
             }
         }
 
+        /// <summary>
+        /// Вызывает callback переключения NPC, зарегистрированный в ModEntry.
+        /// UI не содержит бизнес-логики выбора — только делегирует.
+        /// </summary>
         private void ToggleNpc(string npcName, bool playSound)
         {
-            if (_registry.SelectedNpcNames.Contains(npcName))
-                _registry.SelectedNpcNames.Remove(npcName);
-            else
-            {
-                _registry.SelectedNpcNames.Add(npcName);
-                _registry.CurrentNpcName = npcName;
-            }
-
-            _state.SwitchTargetNPC = _registry.SelectedNpcNames.Count > 0;
-
-            _tiles.Clear();
-            _registry.CurrentNpcList.Clear();
-            _state.SwitchGetNpcPath  = true;
-            _state.SwitchListFull    = false;
-
+            _onToggleNpc?.Invoke(npcName);
             if (playSound) Game1.playSound("smallSelect");
         }
 
