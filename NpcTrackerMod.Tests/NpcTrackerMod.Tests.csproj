@@ -1,8 +1,7 @@
-<<<<<<< HEAD
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net48</TargetFramework>
+    <TargetFramework>net8.0</TargetFramework>
     <IsPackable>false</IsPackable>
     <RootNamespace>NpcTrackerMod.Tests</RootNamespace>
   </PropertyGroup>
@@ -28,34 +27,3 @@
   </ItemGroup>
 
 </Project>
-=======
-<Project Sdk="Microsoft.NET.Sdk">
-
-  <PropertyGroup>
-    <TargetFramework>net48</TargetFramework>
-    <IsPackable>false</IsPackable>
-    <RootNamespace>NpcTrackerMod.Tests</RootNamespace>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <PackageReference Include="xunit"                        Version="2.9.3" />
-    <PackageReference Include="xunit.runner.visualstudio"    Version="3.0.2">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-    </PackageReference>
-    <PackageReference Include="Microsoft.NET.Test.Sdk"       Version="17.13.0" />
-  </ItemGroup>
-
-  <!--
-    Shared sources: only files with NO XNA / SMAPI / StardewValley dependencies.
-    Everything else (Point, SpriteBatch, NPC …) is an integration concern.
-  -->
-  <ItemGroup>
-    <Compile Include="../NpcTrackerMod/Scheduling/JsonUtils.cs"
-             Link="Scheduling/JsonUtils.cs" />
-    <Compile Include="../NpcTrackerMod/Scheduling/ScheduleEntryParser.cs"
-             Link="Scheduling/ScheduleEntryParser.cs" />
-  </ItemGroup>
-
-</Project>
->>>>>>> a8036871776f7dafadaaadf146f5f7f6688c5cc9
