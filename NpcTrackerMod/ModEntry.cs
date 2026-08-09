@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Xna.Framework;
 using NpcTrackerMod.Core;
+using NpcTrackerMod.Multiplayer;
 using NpcTrackerMod.Rendering;
 using NpcTrackerMod.Scheduling;
 using NpcTrackerMod.Tracking;
@@ -37,6 +38,7 @@ namespace NpcTrackerMod
         private bool _globalRoutesBuilt;
         private bool _dayActive;
         private string _previousLocationName;
+        private RouteMessage _pendingRouteMessage;
 
         // ── Entry ─────────────────────────────────────────────────────────────────
 
@@ -59,6 +61,8 @@ namespace NpcTrackerMod
             helper.Events.GameLoop.DayStarted += OnDayStarted;
             helper.Events.GameLoop.DayEnding += OnDayEnding;
             helper.Events.GameLoop.UpdateTicked += OnUpdateTicked;
+            helper.Events.Multiplayer.ModMessageReceived += OnModMessageReceived;
+            helper.Events.Multiplayer.PeerConnected += OnPeerConnected;
 
             // Загружаем JSON-расписания модов заранее, чтобы они были готовы к DayStarted
             _scheduleLoader.LoadAll();
@@ -119,9 +123,82 @@ namespace NpcTrackerMod
             }
 
             PopulateModSources();
+
+            // Host routes are authoritative. This also makes custom schedules and
+            // pathfinding results identical for every player in the save.
+            if (Context.IsMainPlayer)
+                SendRoutesToPlayers();
+            else if (_pendingRouteMessage != null)
+            {
+                var message = _pendingRouteMessage;
+                _pendingRouteMessage = null;
+                ApplyNetworkRoutes(message);
+            }
         }
 
         private void OnDayEnding(object sender, DayEndingEventArgs e) => _dayActive = false;
+
+        /// <summary>
+        /// Receives the complete route snapshot sent by the host.
+        /// </summary>
+        private void OnModMessageReceived(object sender, ModMessageReceivedEventArgs e)
+        {
+            if (e.Type != RouteMessage.MessageType || e.FromModID != ModManifest.UniqueID)
+                return;
+
+            RouteMessage message;
+            try
+            {
+                message = e.ReadAs<RouteMessage>();
+            }
+            catch (Exception ex)
+            {
+                Monitor.Log($"Не удалось прочитать сетевые маршруты: {ex.Message}", LogLevel.Error);
+                return;
+            }
+
+            // A message can arrive before the renderers are initialized or before
+            // DayStarted has finished. Keep it until the client is ready.
+            if (!Context.IsWorldReady || _tracker == null)
+            {
+                _pendingRouteMessage = message;
+                return;
+            }
+
+            ApplyNetworkRoutes(message);
+        }
+
+        /// <summary>
+        /// Sends the current full route snapshot to a player joining mid-day.
+        /// </summary>
+        private void OnPeerConnected(object sender, PeerConnectedEventArgs e)
+        {
+            if (Context.IsMainPlayer && _dayActive)
+                SendRoutesToPlayers(e.Peer.PlayerID);
+        }
+
+        private void SendRoutesToPlayers(long? playerId = null)
+        {
+            var message = RouteMessage.FromStore(_pathStore, _registry);
+            long[] recipients = playerId.HasValue ? new[] { playerId.Value } : null;
+
+            Helper.Multiplayer.SendMessage(
+                message,
+                RouteMessage.MessageType,
+                new[] { ModManifest.UniqueID },
+                recipients);
+        }
+
+        private void ApplyNetworkRoutes(RouteMessage message)
+        {
+            message.ApplyTo(_pathStore, _registry);
+            PopulateModSources();
+
+            _tileRenderer.Clear();
+            _state.SwitchGetNpcPath = true;
+            _registry.RefreshCurrentNpcList();
+            _tracker.InvalidateNpcCache();
+        }
 
         private void OnButtonPressed(object sender, ButtonPressedEventArgs e)
         {
