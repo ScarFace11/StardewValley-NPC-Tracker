@@ -105,13 +105,18 @@ namespace NpcTrackerMod.UI
                 DrawArrow(b, StepPrevBtn(navY), left: true);
                 DrawArrow(b, StepNextBtn(navY), left: false);
 
-                string timeStr   = RouteRenderer.FormatTime(_state.RouteStepTime);
-                string stepLabel = $"{timeStr}   ({_state.RouteStepIndex + 1} / {_state.RouteStepTotal})";
+                string stepLabel = T("main.stepOf", new
+                {
+                    index = _state.RouteStepIndex + 1,
+                    total = _state.RouteStepTotal,
+                    time  = RouteRenderer.FormatTime(_state.RouteStepTime)
+                });
                 DrawCentered(b, stepLabel, Game1.dialogueFont, navY + 2, new Color(200, 160, 30));
 
                 if (!string.IsNullOrEmpty(_state.RouteStepScheduleKey))
-                    DrawCentered(b, _state.RouteStepScheduleKey, Game1.smallFont,
-                        navY + 36, new Color(130, 100, 60));
+                    DrawCentered(b,
+                        TruncateToWidth(Game1.smallFont, _state.RouteStepScheduleKey, BOX_W - PAD * 2),
+                        Game1.smallFont, navY + 36, new Color(130, 100, 60));
 
                 if (_state.RouteStepTotal > 1)
                     DrawCentered(b, T("main.stepHint"), Game1.smallFont, navY + 54, Color.Gray);
@@ -241,7 +246,8 @@ namespace NpcTrackerMod.UI
         /// Вычисляет прямоугольники для чипов вариантов расписания.
         /// Первый элемент всегда «Сегодня» (null-ключ = активное расписание),
         /// затем все известные ключи по порядку.
-        /// Чипы располагаются слева направо с переносом на следующую строку.
+        /// Чипы располагаются слева направо с переносом на следующую строку;
+        /// ширина одного чипа ограничена шириной окна.
         /// </summary>
         private List<(string key, Rectangle rect)> ComputeVariantChipRects(
             int startX, int startY, int maxWidth)
@@ -255,7 +261,8 @@ namespace NpcTrackerMod.UI
 
             // Первый чип — активное дневное расписание
             string todayLabel = T("main.variant.active");
-            int todayW = (int)Game1.smallFont.MeasureString(todayLabel).X + 16;
+            int todayW = Math.Min(
+                (int)Game1.smallFont.MeasureString(todayLabel).X + 16, maxWidth);
             result.Add((null, new Rectangle(cx, cy, todayW, chipH)));
             cx += todayW + chipGap;
 
@@ -264,7 +271,8 @@ namespace NpcTrackerMod.UI
             {
                 foreach (string key in keys)
                 {
-                    int w = (int)Game1.smallFont.MeasureString(key).X + 16;
+                    int w = Math.Min(
+                        (int)Game1.smallFont.MeasureString(key).X + 16, maxWidth);
                     if (cx + w > startX + maxWidth)
                     {
                         cx  = startX;
@@ -280,11 +288,14 @@ namespace NpcTrackerMod.UI
 
         /// <summary>
         /// Рисует чипы вариантов расписания. Выбранный чип подсвечивается жёлтым.
+        /// За пределами нижней границы окна чипы не рисуются.
         /// </summary>
         private void DrawVariantChips(SpriteBatch b, List<(string key, Rectangle rect)> chips)
         {
             foreach (var (key, rect) in chips)
             {
+                if (rect.Bottom > BY + BOX_H - PAD) break;
+
                 bool isSelected = key == null
                     ? _state.SelectedVariantKey == null
                     : key == _state.SelectedVariantKey;
@@ -298,8 +309,11 @@ namespace NpcTrackerMod.UI
                 drawTextureBox(b, Game1.menuTexture, new Rectangle(0, 256, 60, 60),
                     rect.X, rect.Y, rect.Width, rect.Height, bgColor, 0.85f, false);
 
-                var sz = Game1.smallFont.MeasureString(label);
-                Utility.drawTextWithShadow(b, label, Game1.smallFont,
+                // Обрезаем текст по ширине чипа, чтобы не выходил за рамки.
+                string shown = TruncateToWidth(
+                    Game1.smallFont, label, rect.Width - 16);
+                var    sz    = Game1.smallFont.MeasureString(shown);
+                Utility.drawTextWithShadow(b, shown, Game1.smallFont,
                     new Vector2(rect.X + 8, rect.Y + (rect.Height - sz.Y) / 2f),
                     isSelected ? new Color(110, 65, 15) : Game1.textColor);
             }

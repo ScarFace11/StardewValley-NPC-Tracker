@@ -13,6 +13,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.NET.Test.Sdk"       Version="17.13.0" />
+    <PackageReference Include="Newtonsoft.Json"              Version="13.0.4" />
   </ItemGroup>
 
   <!--
@@ -24,6 +25,12 @@
              Link="Scheduling/JsonUtils.cs" />
     <Compile Include="../NpcTrackerMod/Scheduling/ScheduleEntryParser.cs"
              Link="Scheduling/ScheduleEntryParser.cs" />
+    <Compile Include="../NpcTrackerMod/Core/TilePoint.cs"
+             Link="Core/TilePoint.cs" />
+    <Compile Include="../NpcTrackerMod/Core/RouteSnapshot.cs"
+             Link="Core/RouteSnapshot.cs" />
+    <Compile Include="../NpcTrackerMod/Multiplayer/RouteSyncEnvelope.cs"
+             Link="Multiplayer/RouteSyncEnvelope.cs" />
   </ItemGroup>
 
 </Project>

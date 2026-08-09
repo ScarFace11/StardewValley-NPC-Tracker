@@ -12,6 +12,7 @@
   "main.globalRoute": "Global route (all day)",
   "main.stepMode": "Step-by-step route",
   "main.stepHint": "◄ ► or scroll to navigate",
+  "main.stepOf": "Step {{index}} of {{total}} · {{time}}",
   "main.variant.label": "Schedule variant",
   "main.variant.active": "Today",
 
@@ -20,6 +21,10 @@
   "npc.search.placeholder": "Search NPC...",
   "npc.filter.all": "All",
   "npc.reset": "Reset selection",
+  "npc.count": "{{count}} NPC",
+  "npc.countFiltered": "{{shown}} of {{total}} NPC",
+  "npc.selectedCount": "{{count}} selected",
+  "npc.hint.noSelection": "Click an NPC to start tracking it.",
   "npc.empty.waitForDay": "Start a new day to\nload NPC data",
   "npc.empty.notFound": "No NPCs found",
 

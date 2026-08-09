@@ -25,7 +25,7 @@ namespace NpcTrackerMod.UI
         private const int BOX_W        = 700;
         private const int PAD          = 20;
         private const int HEADER_H     = 72;
-        private const int CARD_H       = 156;
+        private const int CARD_H       = 172;
         private const int VISIBLE_CARDS = 3;
         private const int BTN_W        = 130;
         private const int BTN_H        = 34;
@@ -226,99 +226,102 @@ namespace NpcTrackerMod.UI
             bool selected = _state.SwitchTargetNPC &&
                             _registry.SelectedNpcNames.Contains(data.Name);
 
-            var cardRect = new Rectangle(BX + PAD, cardTop, BOX_W - PAD * 2 - 18, CARD_H - 6);
+            // Панель в игровом стиле (bevel-рамка menuTexture) вместо плоского прямоугольника.
+            var panel = new Rectangle(BX + PAD, cardTop + 6, BOX_W - PAD * 2 - 18, CARD_H - 12);
+            var tint  = selected
+                ? new Color(255, 233, 140)
+                : new Color(252, 246, 232);
+            drawTextureBox(b, Game1.menuTexture, new Rectangle(0, 256, 60, 60),
+                panel.X, panel.Y, panel.Width, panel.Height, tint, 1f, false);
 
-            // Фон — более насыщенный для лучшей читаемости
-            Color bg = selected
-                ? new Color(255, 228, 100, 150)
-                : new Color(245, 235, 210, 160);
-            b.Draw(Game1.staminaRect, cardRect, bg);
+            // Кнопка — справа, по вертикальному центру карточки.
+            var btn = SelectBtnRect(cardTop);
 
-            // Рамка — акцентная при выборе, тонкая в обычном состоянии
-            int brd         = selected ? 2 : 1;
-            Color borderCol = selected
-                ? new Color(200, 148, 18, 240)
-                : new Color(170, 145, 100, 160);
-            b.Draw(Game1.staminaRect, new Rectangle(cardRect.X, cardRect.Y, cardRect.Width, brd), borderCol);
-            b.Draw(Game1.staminaRect, new Rectangle(cardRect.X, cardRect.Bottom - brd, cardRect.Width, brd), borderCol);
-            b.Draw(Game1.staminaRect, new Rectangle(cardRect.X, cardRect.Y, brd, cardRect.Height), borderCol);
-            b.Draw(Game1.staminaRect, new Rectangle(cardRect.Right - brd, cardRect.Y, brd, cardRect.Height), borderCol);
+            int px = panel.X + 14;
+            int py = panel.Y + 12;
 
-            // Кнопка — готовим прямоугольник заранее, чтобы ограничить ширину текста
-            var btn  = SelectBtnRect(cardTop);
-            bool hov = btn.Contains(Game1.getMouseX(), Game1.getMouseY());
-
-            int cx = cardRect.X + 10;
-            int cy = cardTop + 8;
-
-            // ── Аватарка NPC ──
+            // ── Строка 1: аватарка + имя + чип источника ──
             int avatarSize = (int)Game1.dialogueFont.MeasureString("A").Y;
             if (data.Portrait != null)
             {
                 b.Draw(data.Portrait,
-                    new Rectangle(cx, cy, avatarSize, avatarSize),
+                    new Rectangle(px, py, avatarSize, avatarSize),
                     new Rectangle(0, 0, 64, 64),
                     Color.White);
-                cx += avatarSize + 6;
             }
 
-            // ── Имя NPC ──
-            Color nameCol = selected ? new Color(140, 78, 0) : Game1.textColor;
-            Utility.drawTextWithShadow(b, data.Name, Game1.dialogueFont,
-                new Vector2(cx, cy), nameCol);
+            int nameX = px + (data.Portrait != null ? avatarSize + 8 : 0);
+            int nameMaxW = btn.X - 12 - nameX - 10;   // не заезжаем на кнопку
+            string name = TruncateToWidth(Game1.dialogueFont, data.Name, nameMaxW);
 
-            // Чип источника
-            float nameW = Game1.dialogueFont.MeasureString(data.Name).X;
-            DrawSourceChip(b, data.Source, (int)(cx + nameW + 10), cy + 6);
-            cy += 38;
+            Utility.drawTextWithShadow(b, name, Game1.dialogueFont,
+                new Vector2(nameX, py + 2),
+                selected ? new Color(140, 78, 0) : Game1.textColor);
 
-            // ── Текущая локация + метка времени ──
+            // Чип источника — после имени, с ограничением ширины.
+            float nameW = Game1.smallFont.MeasureString(name).X;
+            DrawSourceChip(b, data.Source,
+                (int)(nameX + nameW + 10), py + 8, btn.X - 12);
+
+            // ── Строка 2: текущая локация + время посещения ──
             string locLine = T("inspect.currentLocation", new { location = data.CurrentLocation });
             if (!string.IsNullOrEmpty(data.TimeInfo))
                 locLine += $"  ({data.TimeInfo})";
-            Utility.drawTextWithShadow(b, locLine, Game1.smallFont,
-                new Vector2(cx, cy), new Color(75, 75, 75));
-            cy += 22;
+            Utility.drawTextWithShadow(b,
+                TruncateToWidth(Game1.smallFont, locLine, btn.X - 12 - px),
+                Game1.smallFont, new Vector2(px, py + 44), new Color(75, 75, 75));
 
-            // ── Следующий пункт назначения ──
+            // ── Строка 3: следующий пункт назначения ──
             if (data.NextDestination != null)
             {
-                Utility.drawTextWithShadow(b, data.NextDestination, Game1.smallFont,
-                    new Vector2(cx, cy), new Color(50, 120, 55));
+                Utility.drawTextWithShadow(b,
+                    TruncateToWidth(Game1.smallFont, data.NextDestination, btn.X - 12 - px),
+                    Game1.smallFont, new Vector2(px, py + 66), new Color(50, 120, 55));
             }
             else
             {
-                Utility.drawTextWithShadow(b, T("inspect.scheduleFinished"), Game1.smallFont,
-                    new Vector2(cx, cy), Color.Gray);
+                Utility.drawTextWithShadow(b,
+                    T("inspect.scheduleFinished"),
+                    Game1.smallFont, new Vector2(px, py + 66), Color.Gray);
             }
-            cy += 22;
 
-            // ── Расписание в 2 колонки (не вылезает за кнопку) ──
-            // Каждый entry: "07:00  Локация" — локация обрезается если слишком длинная.
+            // ── Разделитель и расписание в 2 колонки ──
+            b.Draw(Game1.staminaRect,
+                new Rectangle(px, py + 92, panel.Right - 14 - px, 2),
+                new Color(180, 155, 110, 150));
+
             if (data.Schedule.Count > 0)
             {
-                int maxCols   = 2;
-                int maxRows   = 2;
-                int maxShow   = maxCols * maxRows;            // 4 записи
-                int availW    = btn.X - cx - 12;             // до левого края кнопки
-                int colW      = availW / maxCols;
+                int maxCols = 2;
+                int maxRows = 2;
+                int maxShow = maxCols * maxRows;            // 4 записи
+                int availW  = btn.X - 12 - px;
+                int colW    = availW / maxCols;
                 var schedColor = new Color(100, 88, 62);
+                var timeColor  = new Color(150, 105, 15);
 
                 int col   = 0;
                 int shown = 0;
-                int sx    = cx;
-                int sy    = cy;
+                int sx    = px;
+                int sy    = py + 104;
 
                 foreach (var s in data.Schedule)
                 {
                     if (shown >= maxShow) break;
-                    string entry = $"{s.Time}  {TruncateText(s.Location, 11)}";
-                    Utility.drawTextWithShadow(b, entry, Game1.smallFont,
-                        new Vector2(sx, sy), schedColor);
+
+                    // Время — золотым, локация — обычным, обрезана по ширине колонки.
+                    Utility.drawTextWithShadow(b, s.Time, Game1.smallFont,
+                        new Vector2(sx, sy), timeColor);
+                    float timeW = Game1.smallFont.MeasureString(s.Time).X;
+                    string loc  = TruncateToWidth(
+                        Game1.smallFont, s.Location, colW - timeW - 8);
+                    Utility.drawTextWithShadow(b, loc, Game1.smallFont,
+                        new Vector2(sx + timeW + 6, sy), schedColor);
+
                     col++;
                     shown++;
-                    if (col % maxCols == 0) { sx = cx; sy += 20; }
-                    else                    { sx = cx + colW; }
+                    if (col % maxCols == 0) { sx = px; sy += 20; }
+                    else                    { sx = px + colW; }
                 }
 
                 if (data.Schedule.Count > maxShow)
@@ -329,6 +332,7 @@ namespace NpcTrackerMod.UI
             }
 
             // ── Кнопка выбрать/снять ──
+            bool hov = btn.Contains(Game1.getMouseX(), Game1.getMouseY());
             Color btnBg = selected
                 ? (hov ? new Color(190, 55, 35) : new Color(215, 72, 52))
                 : (hov ? new Color(65, 138, 50) : new Color(48, 118, 36));
@@ -345,26 +349,35 @@ namespace NpcTrackerMod.UI
                 Color.White);
         }
 
-        /// <summary> Рисует маленький чип с именем источника (мода). </summary>
-        private static void DrawSourceChip(SpriteBatch b, string source, int x, int y)
+        /// <summary> Рисует маленький чип с именем источника (мода), с ограничением ширины. </summary>
+        private static void DrawSourceChip(SpriteBatch b, string source, int x, int y, int maxRight)
         {
-            var sz   = Game1.smallFont.MeasureString(source);
-            var rect = new Rectangle(x, y, (int)sz.X + 14, 24);
+            var sz     = Game1.smallFont.MeasureString(source);
+            int  maxW  = Math.Max(40, maxRight - x);
+            var  rect  = new Rectangle(x, y, Math.Min((int)sz.X + 14, maxW), 24);
             b.Draw(Game1.staminaRect, rect, new Color(185, 165, 120, 160));
-            Utility.drawTextWithShadow(b, source, Game1.smallFont,
+
+            string shown = TruncateToWidth(Game1.smallFont, source, rect.Width - 14);
+            Utility.drawTextWithShadow(b, shown, Game1.smallFont,
                 new Vector2(rect.X + 7, rect.Y + (rect.Height - sz.Y) / 2f),
                 new Color(80, 65, 40));
         }
 
         /// <summary>
-        /// Обрезает строку до maxChars символов с многоточием.
-        /// Используется для имён локаций в расписании, чтобы не выйти за ширину колонки.
+        /// Обрезает строку с многоточием, чтобы она помещалась в maxWidth пикселей
+        /// шрифта font. Используется, чтобы текст не выходил за рамки карточек.
         /// </summary>
-        private static string TruncateText(string text, int maxChars)
+        private static string TruncateToWidth(SpriteFont font, string text, float maxWidth)
         {
-            if (string.IsNullOrEmpty(text)) return "?";
-            if (text.Length <= maxChars)    return text;
-            return text.Substring(0, maxChars - 1) + "…";
+            if (string.IsNullOrEmpty(text) || maxWidth <= 0) return text;
+            if (font.MeasureString(text).X <= maxWidth) return text;
+
+            for (int len = text.Length - 1; len > 1; len--)
+            {
+                if (font.MeasureString(text.Substring(0, len) + "…").X <= maxWidth)
+                    return text.Substring(0, len) + "…";
+            }
+            return "…";
         }
 
         /// <summary> Прямоугольник кнопки для карточки с cardTop = верхний Y карточки. </summary>

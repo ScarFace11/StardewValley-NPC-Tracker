@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using Microsoft.Xna.Framework;
 using StardewModdingAPI;
 using StardewValley;
 
@@ -7,22 +6,23 @@ namespace NpcTrackerMod.Core
 {
     /// <summary>
     /// Чистое хранилище путей NPC. Никакой игровой логики — только данные и merge-операции.
+    /// Тайлы хранятся как TilePoint (без XNA) — данные можно сериализовать и тестировать.
     /// </summary>
     public class NpcPathStore
     {
         private readonly IMonitor _monitor;
 
         /// <summary> Дневные пути: NPC → локация → набор тайлов. </summary>
-        public Dictionary<string, Dictionary<string, HashSet<Point>>> DayPaths { get; }
-            = new Dictionary<string, Dictionary<string, HashSet<Point>>>();
+        public Dictionary<string, Dictionary<string, HashSet<TilePoint>>> DayPaths { get; }
+            = new Dictionary<string, Dictionary<string, HashSet<TilePoint>>>();
 
         /// <summary> Глобальные пути по всему сырому расписанию: NPC → локация → тайлы. </summary>
-        public Dictionary<string, Dictionary<string, HashSet<Point>>> GlobalPaths { get; }
-            = new Dictionary<string, Dictionary<string, HashSet<Point>>>();
+        public Dictionary<string, Dictionary<string, HashSet<TilePoint>>> GlobalPaths { get; }
+            = new Dictionary<string, Dictionary<string, HashSet<TilePoint>>>();
 
         /// <summary> Дневные пути по временным слотам: NPC → время → локация → тайлы. </summary>
-        public Dictionary<string, Dictionary<int, Dictionary<string, HashSet<Point>>>> TimedDayPaths { get; }
-            = new Dictionary<string, Dictionary<int, Dictionary<string, HashSet<Point>>>>();
+        public Dictionary<string, Dictionary<int, Dictionary<string, HashSet<TilePoint>>>> TimedDayPaths { get; }
+            = new Dictionary<string, Dictionary<int, Dictionary<string, HashSet<TilePoint>>>>();
 
         /// <summary>
         /// Ключ активного расписания для каждого NPC (например, "spring_Mon", "marriage", "rain").
@@ -37,8 +37,8 @@ namespace NpcTrackerMod.Core
         /// NPC → ключ варианта → время → локация → тайлы.
         /// Заполняется по запросу через ScheduleProcessor.BuildVariantTimedRoute.
         /// </summary>
-        public Dictionary<string, Dictionary<string, Dictionary<int, Dictionary<string, HashSet<Point>>>>> VariantTimedPaths { get; }
-            = new Dictionary<string, Dictionary<string, Dictionary<int, Dictionary<string, HashSet<Point>>>>>();
+        public Dictionary<string, Dictionary<string, Dictionary<int, Dictionary<string, HashSet<TilePoint>>>>> VariantTimedPaths { get; }
+            = new Dictionary<string, Dictionary<string, Dictionary<int, Dictionary<string, HashSet<TilePoint>>>>>();
 
         // Кеш отсортированных временных ключей для пошагового режима.
         // Инвалидируется в ClearDay — ключи не меняются в течение дня.
@@ -66,14 +66,14 @@ namespace NpcTrackerMod.Core
         /// Если NPC или локация уже есть — тайлы объединяются (UnionWith).
         /// </summary>
         public void AddPath(NPC npc,
-            Dictionary<string, Dictionary<string, HashSet<Point>>> target,
-            Dictionary<string, HashSet<Point>> route)
+            Dictionary<string, Dictionary<string, HashSet<TilePoint>>> target,
+            Dictionary<string, HashSet<TilePoint>> route)
         {
             if (npc?.Name == null) return;
 
             if (!target.TryGetValue(npc.Name, out var npcPaths))
             {
-                npcPaths = new Dictionary<string, HashSet<Point>>();
+                npcPaths = new Dictionary<string, HashSet<TilePoint>>();
                 target[npc.Name] = npcPaths;
                 _monitor.Log($"Добавлен NPC в хранилище: {npc.Name}", LogLevel.Trace);
             }
@@ -82,7 +82,7 @@ namespace NpcTrackerMod.Core
             {
                 if (!npcPaths.TryGetValue(kvp.Key, out var existing))
                 {
-                    npcPaths[kvp.Key] = new HashSet<Point>(kvp.Value);
+                    npcPaths[kvp.Key] = new HashSet<TilePoint>(kvp.Value);
                     _monitor.Log($"Новая локация '{kvp.Key}' для {npc.Name}", LogLevel.Trace);
                 }
                 else
@@ -97,13 +97,13 @@ namespace NpcTrackerMod.Core
         /// Объединяет сегменты source в target (без дубликатов тайлов).
         /// </summary>
         public static void MergeSegments(
-            Dictionary<string, HashSet<Point>> target,
-            Dictionary<string, HashSet<Point>> source)
+            Dictionary<string, HashSet<TilePoint>> target,
+            Dictionary<string, HashSet<TilePoint>> source)
         {
             foreach (var kvp in source)
             {
                 if (!target.TryGetValue(kvp.Key, out var pts))
-                    target[kvp.Key] = new HashSet<Point>(kvp.Value);
+                    target[kvp.Key] = new HashSet<TilePoint>(kvp.Value);
                 else
                     pts.UnionWith(kvp.Value);
             }

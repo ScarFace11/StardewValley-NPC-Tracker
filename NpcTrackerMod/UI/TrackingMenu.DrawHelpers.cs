@@ -46,13 +46,34 @@ namespace NpcTrackerMod.UI
             Utility.drawTextWithShadow(b, text, Game1.smallFont,
                 new Vector2(x, y), new Color(110, 90, 65));
 
+        /// <summary>
+        /// Обрезает строку с многоточием, чтобы она помещалась в maxWidth пикселей
+        /// шрифта font. Используется, чтобы текст не выходил за рамки меню.
+        /// </summary>
+        private static string TruncateToWidth(SpriteFont font, string text, float maxWidth)
+        {
+            if (string.IsNullOrEmpty(text) || maxWidth <= 0) return text;
+            if (font.MeasureString(text).X <= maxWidth) return text;
+
+            for (int len = text.Length - 1; len > 1; len--)
+            {
+                if (font.MeasureString(text.Substring(0, len) + "…").X <= maxWidth)
+                    return text.Substring(0, len) + "…";
+            }
+            return "…";
+        }
+
         /// <summary> Рисует пару «Ключ: Значение» и сдвигает y вниз на 26px. </summary>
         private void DrawKV(SpriteBatch b, string key, string value, int x, ref int y)
         {
             Utility.drawTextWithShadow(b, key + ":", Game1.smallFont,
                 new Vector2(x, y), new Color(100, 90, 75));
             float offset = Game1.smallFont.MeasureString(key + ":  ").X;
-            Utility.drawTextWithShadow(b, value, Game1.smallFont,
+
+            // Значение обрезается, чтобы не выходить за правую границу меню.
+            float maxW = (BX + BOX_W - PAD) - (x + offset);
+            string shown = TruncateToWidth(Game1.smallFont, value, maxW);
+            Utility.drawTextWithShadow(b, shown, Game1.smallFont,
                 new Vector2(x + offset, y), new Color(60, 50, 40));
             y += 26;
         }

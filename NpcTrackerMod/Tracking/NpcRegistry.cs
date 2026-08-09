@@ -143,5 +143,36 @@ namespace NpcTrackerMod.Tracking
             SelectedNpcNames.Clear();
             NpcVariantKeys.Clear();
         }
+
+        /// <summary>
+        /// Заменяет данные маршрутов из снапшота хоста (TotalNpcList, NpcVariantKeys),
+        /// сохраняя пользовательский выбор NPC (SelectedNpcNames, CurrentNpcName,
+        /// CurrentNpcList). Вызывается вместо ClearDay при применении сетевого снапшота,
+        /// чтобы подключившийся посреди дня игрок не терял выбор.
+        /// </summary>
+        public void SyncFromSnapshot(
+            IEnumerable<string> totalNpcList,
+            Dictionary<string, List<string>> variantKeys)
+        {
+            TotalNpcList.Clear();
+            if (totalNpcList != null)
+            {
+                foreach (var name in totalNpcList)
+                {
+                    if (!string.IsNullOrEmpty(name))
+                        TotalNpcList.Add(name);
+                }
+            }
+
+            NpcVariantKeys.Clear();
+            if (variantKeys != null)
+            {
+                foreach (var kvp in variantKeys)
+                {
+                    if (!string.IsNullOrEmpty(kvp.Key) && kvp.Value != null)
+                        NpcVariantKeys[kvp.Key] = new List<string>(kvp.Value);
+                }
+            }
+        }
     }
 }

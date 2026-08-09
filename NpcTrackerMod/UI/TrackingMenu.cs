@@ -121,6 +121,9 @@ namespace NpcTrackerMod.UI
         /// <summary> Возвращает перевод по ключу (без токенов). </summary>
         private string T(string key) => LocalizationHelper.Get(_i18n, key);
 
+        /// <summary> Возвращает перевод по ключу с токенами (например, {{count}}). </summary>
+        private string T(string key, object tokens) => LocalizationHelper.Get(_i18n, key, tokens);
+
         /// <summary> True пока поле поиска NPC в фокусе. </summary>
         public bool IsSearchFocused => _searchFocused;
 
@@ -309,6 +312,18 @@ namespace NpcTrackerMod.UI
                     _npcSearch = _npcSearch.Substring(0, _npcSearch.Length - 1);
                     RebuildNpcFilter();
                 }
+                return;
+            }
+
+            // Стрелки ◄ ► переключают вкладки — удобно без мыши.
+            if (key == Microsoft.Xna.Framework.Input.Keys.Left ||
+                key == Microsoft.Xna.Framework.Input.Keys.Right)
+            {
+                int dir = key == Microsoft.Xna.Framework.Input.Keys.Right ? 1 : -1;
+                _activeTab = (_activeTab + dir + _tabLabels.Length) % _tabLabels.Length;
+                _searchFocused = false;
+                RebuildTab();
+                Game1.playSound("shwip");
                 return;
             }
 

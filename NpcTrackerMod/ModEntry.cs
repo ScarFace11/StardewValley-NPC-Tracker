@@ -38,7 +38,7 @@ namespace NpcTrackerMod
         private bool _globalRoutesBuilt;
         private bool _dayActive;
         private string _previousLocationName;
-        private RouteMessage _pendingRouteMessage;
+        private RouteSync _routeSync;
 
         // ── Entry ─────────────────────────────────────────────────────────────────
 
@@ -61,8 +61,6 @@ namespace NpcTrackerMod
             helper.Events.GameLoop.DayStarted += OnDayStarted;
             helper.Events.GameLoop.DayEnding += OnDayEnding;
             helper.Events.GameLoop.UpdateTicked += OnUpdateTicked;
-            helper.Events.Multiplayer.ModMessageReceived += OnModMessageReceived;
-            helper.Events.Multiplayer.PeerConnected += OnPeerConnected;
 
             // Загружаем JSON-расписания модов заранее, чтобы они были готовы к DayStarted
             _scheduleLoader.LoadAll();
@@ -77,10 +75,20 @@ namespace NpcTrackerMod
             _tooltipRenderer = new TooltipRenderer(_tileRenderer, _registry, _config, Helper.Translation, Monitor);
             _tracker = new NpcTracker(_state, _registry, _routeRenderer, _tileRenderer);
 
+            // Синхронизация маршрутов в мультиплеере: хост рассылает снапшот дня,
+            // фарм-хэнды применяют его вместо локального построения.
+            _routeSync = new RouteSync(
+                Monitor, Helper, ModManifest.UniqueID,
+                _pathStore, _registry, _state,
+                _tileRenderer, _tracker,
+                PopulateModSources);
+
             // Подписки на события, требующие инициализированного рендерера
             Helper.Events.Input.ButtonPressed += OnButtonPressed;
             Helper.Events.Display.RenderedWorld += OnRenderedWorld;
             Helper.Events.Player.Warped += OnPlayerWarped;
+            Helper.Events.Multiplayer.ModMessageReceived += OnModMessageReceived;
+            Helper.Events.Multiplayer.PeerConnected += OnPeerConnected;
         }
 
         // ── SMAPI Events ──────────────────────────────────────────────────────────
@@ -101,72 +109,42 @@ namespace NpcTrackerMod
             // Собираем GameNpcs из всех локаций
             _registry.RefreshGameNpcs();
 
-            // Глобальные маршруты строятся только один раз за сессию
-            if (!_globalRoutesBuilt)
+            // Маршруты авторитетны у хоста: фарм-хэнды получают готовый снапшот
+            // (локальное построение — только фолбэк, если снапшот не пришёл).
+            // Это делает кастомные расписания и результаты pathfinding
+            // одинаковыми для всех игроков в сохранении.
+            if (_routeSync.ShouldSkipLocalBuild)
             {
-                _scheduleLoader.TransferToProcessor();
-                foreach (var npc in _registry.GameNpcs)
+                // Фолбэк: локальное построение с тем же refresh-танцем, что и ApplySnapshot.
+                _routeSync.WaitForHostRoutes(() =>
                 {
-                    try { _scheduleProcessor.BuildGlobalRoute(npc, null, null, null); }
-                    catch (Exception ex)
-                    { Monitor.Log($"Ошибка глобального маршрута {npc.Name}: {ex.Message}", LogLevel.Warn); }
-                }
-                _globalRoutesBuilt = true;
+                    BuildAllRoutes();
+                    _tileRenderer.Clear();
+                    _state.SwitchGetNpcPath = true;
+                    _registry.RefreshCurrentNpcList();
+                    _tracker.InvalidateNpcCache();
+                });
             }
-
-            // Дневные маршруты строятся каждый день
-            foreach (var npc in _registry.GameNpcs)
+            else
             {
-                try { _scheduleProcessor.BuildDayRoutes(npc); }
-                catch (Exception ex)
-                { Monitor.Log($"Ошибка дневного маршрута {npc.Name}: {ex.Message}", LogLevel.Warn); }
-            }
-
-            PopulateModSources();
-
-            // Host routes are authoritative. This also makes custom schedules and
-            // pathfinding results identical for every player in the save.
-            if (Context.IsMainPlayer)
-                SendRoutesToPlayers();
-            else if (_pendingRouteMessage != null)
-            {
-                var message = _pendingRouteMessage;
-                _pendingRouteMessage = null;
-                ApplyNetworkRoutes(message);
+                BuildAllRoutes();
+                _routeSync.BroadcastDayRoutes();
             }
         }
 
-        private void OnDayEnding(object sender, DayEndingEventArgs e) => _dayActive = false;
+        private void OnDayEnding(object sender, DayEndingEventArgs e)
+        {
+            _dayActive = false;
+            _routeSync.OnDayEnding();
+        }
 
         /// <summary>
         /// Receives the complete route snapshot sent by the host.
+        /// Вся логика (проверка отправителя, версия формата, gzip,
+        /// отложенное применение) живёт в RouteSync.
         /// </summary>
         private void OnModMessageReceived(object sender, ModMessageReceivedEventArgs e)
-        {
-            if (e.Type != RouteMessage.MessageType || e.FromModID != ModManifest.UniqueID)
-                return;
-
-            RouteMessage message;
-            try
-            {
-                message = e.ReadAs<RouteMessage>();
-            }
-            catch (Exception ex)
-            {
-                Monitor.Log($"Не удалось прочитать сетевые маршруты: {ex.Message}", LogLevel.Error);
-                return;
-            }
-
-            // A message can arrive before the renderers are initialized or before
-            // DayStarted has finished. Keep it until the client is ready.
-            if (!Context.IsWorldReady || _tracker == null)
-            {
-                _pendingRouteMessage = message;
-                return;
-            }
-
-            ApplyNetworkRoutes(message);
-        }
+            => _routeSync.HandleModMessageReceived(e);
 
         /// <summary>
         /// Sends the current full route snapshot to a player joining mid-day.
@@ -174,30 +152,7 @@ namespace NpcTrackerMod
         private void OnPeerConnected(object sender, PeerConnectedEventArgs e)
         {
             if (Context.IsMainPlayer && _dayActive)
-                SendRoutesToPlayers(e.Peer.PlayerID);
-        }
-
-        private void SendRoutesToPlayers(long? playerId = null)
-        {
-            var message = RouteMessage.FromStore(_pathStore, _registry);
-            long[] recipients = playerId.HasValue ? new[] { playerId.Value } : null;
-
-            Helper.Multiplayer.SendMessage(
-                message,
-                RouteMessage.MessageType,
-                new[] { ModManifest.UniqueID },
-                recipients);
-        }
-
-        private void ApplyNetworkRoutes(RouteMessage message)
-        {
-            message.ApplyTo(_pathStore, _registry);
-            PopulateModSources();
-
-            _tileRenderer.Clear();
-            _state.SwitchGetNpcPath = true;
-            _registry.RefreshCurrentNpcList();
-            _tracker.InvalidateNpcCache();
+                _routeSync.SendSnapshotToPeer(e.Peer.PlayerID);
         }
 
         private void OnButtonPressed(object sender, ButtonPressedEventArgs e)
@@ -292,6 +247,9 @@ namespace NpcTrackerMod
         {
             if (!_dayActive) return;
 
+            // Фолбэк для фарм-хэндов: локальное построение, если снапшот хоста не пришёл.
+            _routeSync.Tick();
+
             // Обработка запроса на построение маршрута выбранного варианта расписания.
             // Проверяется каждый тик для минимальной задержки после клика в меню.
             if (_state.SwitchBuildVariant)
@@ -384,6 +342,36 @@ namespace NpcTrackerMod
                     ? mod
                     : Helper.Translation.Get("source.vanilla").ToString();
             }
+        }
+
+        /// <summary>
+        /// Строит глобальные (один раз за сессию) и дневные маршруты всех NPC.
+        /// Используется хостом в DayStarted и фарм-хэндами как фолбэк,
+        /// если снапшот хоста не пришёл.
+        /// </summary>
+        private void BuildAllRoutes()
+        {
+            if (!_globalRoutesBuilt)
+            {
+                _scheduleLoader.TransferToProcessor();
+                foreach (var npc in _registry.GameNpcs)
+                {
+                    try { _scheduleProcessor.BuildGlobalRoute(npc, null, null, null); }
+                    catch (Exception ex)
+                    { Monitor.Log($"Ошибка глобального маршрута {npc.Name}: {ex.Message}", LogLevel.Warn); }
+                }
+                _globalRoutesBuilt = true;
+            }
+
+            // Дневные маршруты строятся каждый день
+            foreach (var npc in _registry.GameNpcs)
+            {
+                try { _scheduleProcessor.BuildDayRoutes(npc); }
+                catch (Exception ex)
+                { Monitor.Log($"Ошибка дневного маршрута {npc.Name}: {ex.Message}", LogLevel.Warn); }
+            }
+
+            PopulateModSources();
         }
 
         private void OpenMenu()

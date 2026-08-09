@@ -21,8 +21,8 @@ namespace NpcTrackerMod.Rendering
         private readonly ITranslationHelper _i18n;
 
         // Переиспользуемый буфер для TimeFilter — не создаётся каждый кадр
-        private readonly Dictionary<string, HashSet<Point>> _timedPathBuffer
-            = new Dictionary<string, HashSet<Point>>();
+        private readonly Dictionary<string, HashSet<TilePoint>> _timedPathBuffer
+            = new Dictionary<string, HashSet<TilePoint>>();
 
         // Цвета стартового и конечного тайла пошагового маршрута.
         // Static readonly — значения не аллоцируются каждый кадр.
@@ -124,7 +124,7 @@ namespace NpcTrackerMod.Rendering
                 }
 
                 string timeLabel = null;
-                Dictionary<string, HashSet<Point>> pathData = null;
+                Dictionary<string, HashSet<TilePoint>> pathData = null;
 
                 if (_state.SwitchGlobalNpcPath)
                 {
@@ -147,7 +147,7 @@ namespace NpcTrackerMod.Rendering
                         foreach (var loc in kvp.Value)
                         {
                             if (!_timedPathBuffer.TryGetValue(loc.Key, out var pts))
-                                _timedPathBuffer[loc.Key] = new HashSet<Point>(loc.Value);
+                                _timedPathBuffer[loc.Key] = new HashSet<TilePoint>(loc.Value);
                             else
                                 pts.UnionWith(loc.Value);
                         }
@@ -181,10 +181,11 @@ namespace NpcTrackerMod.Rendering
                     var routeColor = RouteColor;
                     foreach (var coord in tileSet)
                     {
-                        _tiles.MarkTile(coord, routeColor, 2);
+                        var tile = new Point(coord.X, coord.Y);
+                        _tiles.MarkTile(tile, routeColor, 2);
                         // timeLabel остаётся null для обычных маршрутов —
                         // тултип покажет только имя NPC без лишней метки
-                        _tiles.RegisterOwner(coord, npc.Name, timeLabel);
+                        _tiles.RegisterOwner(tile, npc.Name, timeLabel);
                     }
                 }
             }
@@ -240,7 +241,7 @@ namespace NpcTrackerMod.Rendering
                               && variantPaths.ContainsKey(_state.SelectedVariantKey);
 
             List<int> keys;
-            Dictionary<int, Dictionary<string, HashSet<Point>>> timedPath;
+            Dictionary<int, Dictionary<string, HashSet<TilePoint>>> timedPath;
 
             if (useVariant)
             {
@@ -278,8 +279,9 @@ namespace NpcTrackerMod.Rendering
                     var routeColor = RouteColor;
                     foreach (var coord in fallbackTiles)
                     {
-                        _tiles.MarkTile(coord, routeColor, 2);
-                        _tiles.RegisterOwner(coord, npc.Name, null);
+                        var tile = new Point(coord.X, coord.Y);
+                        _tiles.MarkTile(tile, routeColor, 2);
+                        _tiles.RegisterOwner(tile, npc.Name, null);
                     }
                 }
                 return;
@@ -316,8 +318,9 @@ namespace NpcTrackerMod.Rendering
             var stepRouteColor = RouteColor;
             foreach (var coord in tileSet)
             {
-                _tiles.MarkTile(coord, stepRouteColor, 2);
-                _tiles.RegisterOwner(coord, npc.Name, label);
+                var tile = new Point(coord.X, coord.Y);
+                _tiles.MarkTile(tile, stepRouteColor, 2);
+                _tiles.RegisterOwner(tile, npc.Name, label);
             }
 
             // Стартовый/конечный тайлы только для активного дневного расписания

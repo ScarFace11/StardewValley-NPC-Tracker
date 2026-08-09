@@ -43,8 +43,8 @@ namespace NpcTrackerMod.Scheduling
             if (npc.Schedule?.Any() != true)
                 return;
 
-            var totalPath = new Dictionary<string, HashSet<Point>>();
-            var timedPath = new Dictionary<int, Dictionary<string, HashSet<Point>>>();
+            var totalPath = new Dictionary<string, HashSet<TilePoint>>();
+            var timedPath = new Dictionary<int, Dictionary<string, HashSet<TilePoint>>>();
 
             // lastLocationName — локальная переменная, передаётся по ref в FilterRouteByLocation.
             // Сохраняет, в какой локации закончился предыдущий сегмент маршрута, чтобы корректно
@@ -101,7 +101,7 @@ namespace NpcTrackerMod.Scheduling
             var masterSchedule = BuildMasterSchedule(npc, customPath, customPathKey);
             _registry.TotalNpcList.Add(npc.Name);
 
-            var totalPath = new Dictionary<string, HashSet<Point>>();
+            var totalPath = new Dictionary<string, HashSet<TilePoint>>();
 
             // Состояние прохода по маршруту — локальные переменные, передаются по ref.
             // Это гарантирует атомарность: исключение внутри одного ключа не загрязняет
@@ -178,7 +178,7 @@ namespace NpcTrackerMod.Scheduling
                 return;
             }
 
-            var timedPath = new Dictionary<int, Dictionary<string, HashSet<Point>>>();
+            var timedPath = new Dictionary<int, Dictionary<string, HashSet<TilePoint>>>();
 
             string lastLocationName = null;
             string lastLocation     = npc.currentLocation?.Name;
@@ -253,7 +253,7 @@ namespace NpcTrackerMod.Scheduling
             // Сохраняем в VariantTimedPaths.
             if (!_store.VariantTimedPaths.TryGetValue(npc.Name, out var variantPaths))
             {
-                variantPaths = new Dictionary<string, Dictionary<int, Dictionary<string, HashSet<Point>>>>();
+                variantPaths = new Dictionary<string, Dictionary<int, Dictionary<string, HashSet<TilePoint>>>>();
                 _store.VariantTimedPaths[npc.Name] = variantPaths;
             }
             variantPaths[variantKey] = timedPath;
@@ -275,7 +275,7 @@ namespace NpcTrackerMod.Scheduling
             NPC npc,
             string key,
             string rawData,
-            Dictionary<string, HashSet<Point>> totalPath,
+            Dictionary<string, HashSet<TilePoint>> totalPath,
             ref string lastLocationName,
             ref string endLocationName)
         {
@@ -398,10 +398,10 @@ namespace NpcTrackerMod.Scheduling
         /// начальную локацию и обновляет при каждом обнаруженном варпе, чтобы вызывающий
         /// код мог использовать итоговое значение для следующего вызова.
         /// </summary>
-        public Dictionary<string, HashSet<Point>> FilterRouteByLocation(
+        public Dictionary<string, HashSet<TilePoint>> FilterRouteByLocation(
             string startLocation, Stack<Point> points, ref string lastLocationName)
         {
-            var result = new Dictionary<string, HashSet<Point>>();
+            var result = new Dictionary<string, HashSet<TilePoint>>();
 
             if (string.IsNullOrEmpty(startLocation) || points == null || !points.Any())
             {
@@ -414,17 +414,19 @@ namespace NpcTrackerMod.Scheduling
             if (lastLocationName == null)
                 lastLocationName = startLocation;
 
-            var  currentSegment = new HashSet<Point>();
-            var  prevCoord      = Point.Zero;
-            bool firstPoint     = true;  // явный флаг вместо Point.Zero как sentinel
+            var  currentSegment = new HashSet<TilePoint>();
+            var  prevCoord      = new TilePoint(0, 0);
+            bool firstPoint     = true;  // явный флаг вместо (0, 0) как sentinel
 
             foreach (var pt in points)
             {
+                var tile = new TilePoint(pt.X, pt.Y);
+
                 if (firstPoint)
                 {
                     firstPoint = false;
-                    prevCoord  = pt;
-                    currentSegment.Add(pt);
+                    prevCoord  = tile;
+                    currentSegment.Add(tile);
                     continue;
                 }
 
@@ -433,16 +435,17 @@ namespace NpcTrackerMod.Scheduling
 
                 if (adjacent)
                 {
-                    currentSegment.Add(pt);
-                    prevCoord = pt;
+                    currentSegment.Add(tile);
+                    prevCoord = tile;
                 }
                 else
                 {
                     AppendSegment(result, lastLocationName, currentSegment);
-                    currentSegment = new HashSet<Point>();
-                    string dest = _mapper.GetDestination(lastLocationName, prevCoord);
+                    currentSegment = new HashSet<TilePoint>();
+                    string dest = _mapper.GetDestination(
+                        lastLocationName, new Point(prevCoord.X, prevCoord.Y));
                     if (dest != null) lastLocationName = dest;
-                    prevCoord = pt;
+                    prevCoord = tile;
                 }
             }
 
@@ -537,12 +540,12 @@ namespace NpcTrackerMod.Scheduling
         }
 
         private static void AppendSegment(
-            Dictionary<string, HashSet<Point>> result,
+            Dictionary<string, HashSet<TilePoint>> result,
             string location,
-            HashSet<Point> segment)
+            HashSet<TilePoint> segment)
         {
             if (!result.TryGetValue(location, out var existing))
-                result[location] = new HashSet<Point>(segment);
+                result[location] = new HashSet<TilePoint>(segment);
             else
                 existing.UnionWith(segment);
         }

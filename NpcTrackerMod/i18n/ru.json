@@ -12,6 +12,7 @@
   "main.globalRoute": "Глобальный маршрут (весь день)",
   "main.stepMode": "Пошаговый маршрут",
   "main.stepHint": "◄ ► или скролл для навигации",
+  "main.stepOf": "Шаг {{index}} из {{total}} · {{time}}",
   "main.variant.label": "Вариант расписания",
   "main.variant.active": "Сегодня",
 
@@ -20,6 +21,10 @@
   "npc.search.placeholder": "Поиск NPC...",
   "npc.filter.all": "Все",
   "npc.reset": "Сбросить выбор",
+  "npc.count": "NPC: {{count}}",
+  "npc.countFiltered": "Показано {{shown}} из {{total}} NPC",
+  "npc.selectedCount": "выбрано {{count}}",
+  "npc.hint.noSelection": "Нажмите на NPC, чтобы начать отслеживание.",
   "npc.empty.waitForDay": "Начните новый день, чтобы\nзагрузить данные NPC",
   "npc.empty.notFound": "NPC не найдены",
 
