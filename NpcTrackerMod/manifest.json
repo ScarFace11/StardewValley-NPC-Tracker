@@ -1,11 +1,11 @@
 {
   "Name": "NpcTrackerMod",
   "Author": "ScarFace",
-  "Version": "1.1.0",
+  "Version": "1.2.0",
   "Description": "Tracking the path of the NPC",
   "UniqueID": "ScarFace.NpcTrackerMod",
   "EntryDll": "NpcTrackerMod.dll",
   "MinimumApiVersion": "4.0.0",
   "MinimumGameVersion": "1.6.0",
-  "UpdateKeys": [ "GitHub:ScarFace11/SV_NpcTrakerMod" ]
+  "UpdateKeys": [ "GitHub:ScarFace11/StardewValley-NPC-Tracker" ]
 }

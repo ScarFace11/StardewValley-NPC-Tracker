@@ -34,9 +34,6 @@ namespace NpcTrackerMod.Tracking
         /// <summary> Источник каждого NPC: "Жители деревни" или название мода. </summary>
         public Dictionary<string, string> NpcModSource { get; } = new Dictionary<string, string>();
 
-        /// <summary> Чёрный список — эти NPC не отслеживаются. </summary>
-        public HashSet<string> BlacklistedNpcs { get; } = new HashSet<string>();
-
         /// <summary>
         /// Все ключи вариантов расписания для каждого NPC.
         /// Заполняется ScheduleProcessor при построении дневного маршрута.
@@ -113,27 +110,10 @@ namespace NpcTrackerMod.Tracking
             return _store.DayPaths.ContainsKey(name) ? name : null;
         }
 
-        // ── Чёрный список ─────────────────────────────────────────────────────────
-
-        /// <summary> Добавляет NPC в чёрный список. </summary>
-        public void Blacklist(string npcName)
-        {
-            if (!string.IsNullOrEmpty(npcName))
-                BlacklistedNpcs.Add(npcName);
-        }
-
-        /// <summary> Убирает NPC из чёрного списка. </summary>
-        public void Unblacklist(string npcName) => BlacklistedNpcs.Remove(npcName);
-
-        /// <summary> Удаляет из TotalNpcList всех NPC из чёрного списка. </summary>
-        public void ApplyBlacklist() => TotalNpcList.ExceptWith(BlacklistedNpcs);
-
         // ── Сброс ────────────────────────────────────────────────────────────────
 
         /// <summary>
         /// Очищает дневное состояние (вызывается в начале каждого дня).
-        /// BlacklistedNpcs намеренно НЕ сбрасывается — пользовательский
-        /// чёрный список должен сохраняться между днями.
         /// </summary>
         public void ClearDay()
         {

@@ -1,0 +1,16 @@
+# Normalize line endings for text files
+* text=auto
+
+# Sources — LF everywhere (compiles identically on all platforms)
+*.cs text eol=lf
+*.csproj text eol=lf
+*.sln text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.gitignore text eol=lf
+*.gitattributes text eol=lf
+
+# Binary files — never touch
+*.dll binary
+*.png binary
+*.zip binary

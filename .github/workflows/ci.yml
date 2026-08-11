@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: Build & test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Validate JSON (manifest + i18n)
+        shell: bash
+        run: |
+          node -e "
+          const fs = require('fs');
+          const files = [
+            'NpcTrackerMod/manifest.json',
+            'NpcTrackerMod/i18n/default.json',
+            'NpcTrackerMod/i18n/ru.json'
+          ];
+          for (const f of files) {
+            JSON.parse(fs.readFileSync(f, 'utf8'));
+            console.log('OK ' + f);
+          }
+          "
+
+      - name: Build & run tests
+        run: dotnet test NpcTrackerMod.Tests/NpcTrackerMod.Tests.csproj -v minimal
+
+      # The mod project itself can only be compiled with the game's DLLs
+      # (Pathoschild.Stardew.ModBuildConfig requires a GamePath that contains
+      # 'Stardew Valley.dll' + 'StardewModdingAPI.dll'), so hosted runners
+      # can't build it. This step runs only on self-hosted runners that define
+      # the GAME_PATH repository variable; the release workflow compiles the
+      # mod on tags via SteamCMD.
+      - name: Compile mod project (optional, needs GAME_PATH)
+        if: vars.GAME_PATH != ''
+        run: dotnet build NpcTrackerMod/NpcTrackerMod.csproj -c Release -p:GamePath="${{ vars.GAME_PATH }}" -p:EnableModDeploy=false -v minimal

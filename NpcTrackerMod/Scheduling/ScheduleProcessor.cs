@@ -195,7 +195,7 @@ namespace NpcTrackerMod.Scheduling
                 // Специальный слот "TIME bed": NPC возвращается домой спать.
                 if (parts.Length == 2 && parts[1] == "bed")
                 {
-                    string homeMap = npc.defaultMap.Value;
+                    string homeMap = npc.DefaultMap;
                     if (!string.IsNullOrEmpty(homeMap))
                     {
                         var homeLoc = Game1.getLocationFromName(homeMap);
@@ -305,12 +305,11 @@ namespace NpcTrackerMod.Scheduling
 
                 // Специальный слот "TIME bed": NPC возвращается домой спать.
                 // "bed" — ключевое слово движка, не реальная карта.
-                // defaultMap — NetString, используем .Value.
                 // defaultPosition — protected поле Character, снаружи недоступно;
                 // вместо него берём первый warp-тайл домашней локации как точку входа.
                 if (parts.Length == 2 && parts[1] == "bed")
                 {
-                    string homeMap = npc.defaultMap.Value;
+                    string homeMap = npc.DefaultMap;
                     if (!string.IsNullOrEmpty(homeMap))
                     {
                         // Warp-тайл у двери — ближайшая разумная точка внутри дома.

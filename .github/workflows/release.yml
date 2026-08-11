@@ -1,0 +1,88 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    name: Tests (gate)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build & run tests
+        run: dotnet test NpcTrackerMod.Tests/NpcTrackerMod.Tests.csproj -v minimal
+
+  release:
+    name: Create GitHub release
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      STEAM_USERNAME: ${{ secrets.STEAM_USERNAME }}
+      STEAM_PASSWORD: ${{ secrets.STEAM_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Verify manifest version matches tag
+        run: |
+          version=$(python3 -c "import json; print(json.load(open('NpcTrackerMod/manifest.json'))['Version'])")
+          echo "Manifest version: $version, tag: $GITHUB_REF_NAME"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Manifest version ($version) does not match tag ($GITHUB_REF_NAME). Bump NpcTrackerMod/manifest.json first."
+            exit 1
+          fi
+
+      # Compiling the mod requires the game's DLLs. The SteamCMD step downloads
+      # the game (Steam app 413150) using credentials stored as repository
+      # secrets (Settings -> Secrets and variables -> Actions):
+      #   STEAM_USERNAME, STEAM_PASSWORD
+      # Both steps are best-effort: if SteamCMD can't log in (e.g. Steam Guard),
+      # the release is still created and you attach the locally built zip.
+      - name: Install game files via SteamCMD
+        if: env.STEAM_USERNAME != '' && env.STEAM_PASSWORD != ''
+        continue-on-error: true
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq lib32gcc-s1 lib32stdc++6
+          mkdir -p "$HOME/steamcmd"
+          cd "$HOME/steamcmd"
+          curl -sSL "https://steamcdn-a.akamaihd.net/client/installer/steamcmd_linux.tar.gz" -o steamcmd.tar.gz
+          tar -xzf steamcmd.tar.gz
+          timeout 600 ./steamcmd.sh +@sSteamCmdForcePlatformType windows \
+            +force_install_dir "$GITHUB_WORKSPACE/game" \
+            +login "$STEAM_USERNAME" "$STEAM_PASSWORD" \
+            +app_update 413150 +quit
+
+      - name: Build mod + release zip
+        if: env.STEAM_USERNAME != '' && env.STEAM_PASSWORD != ''
+        continue-on-error: true
+        run: |
+          dotnet build NpcTrackerMod/NpcTrackerMod.csproj -c Release \
+            -p:GamePath="$GITHUB_WORKSPACE/game" \
+            -p:EnableModDeploy=false \
+            -v minimal
+          ls -la NpcTrackerMod/bin/Release/net6.0/*.zip
+
+      - name: Publish release
+        run: |
+          gh release create "$GITHUB_REF_NAME" --generate-notes || true
+          if ls NpcTrackerMod/bin/Release/net6.0/*.zip >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" NpcTrackerMod/bin/Release/net6.0/*.zip --clobber
+          else
+            echo "::warning::No release zip was built. Set the STEAM_USERNAME/STEAM_PASSWORD secrets to enable automatic builds, or attach the zip built locally (NpcTrackerMod/bin/Release/net6.0)."
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}

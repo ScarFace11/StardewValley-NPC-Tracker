@@ -7,7 +7,7 @@
 ![Platform](https://img.shields.io/badge/Game-Stardew%20Valley-8BC34A?style=for-the-badge)
 ![Language](https://img.shields.io/badge/C%23-7.3-239120?style=for-the-badge&logo=csharp)
 ![Framework](https://img.shields.io/badge/SMAPI-Latest-blue?style=for-the-badge)
-![License](https://img.shields.io/badge/Status-Personal_Project-orange?style=for-the-badge)
+![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)
 
 *A developer tool for visualizing NPC schedules, routes and movement in real time.*
 
@@ -41,7 +41,13 @@ Unlike simple minimap trackers, this project parses schedule data, processes NPC
 
 ✅ Modular architecture
 
-✅ Unit tests for schedule parsing
+✅ Multiplayer route sync (host-authoritative snapshots)
+
+✅ Cross-platform: Windows, Linux, macOS
+
+✅ Tile inspector (mouse wheel)
+
+✅ Unit tests for schedule parsing, snapshots and network envelopes
 
 ---
 
@@ -52,7 +58,7 @@ Unlike simple minimap trackers, this project parses schedule data, processes NPC
 | C# 7.3 | Main programming language |
 | SMAPI | Stardew Valley modding API |
 | MonoGame | Rendering |
-| .NET Framework | Runtime |
+| .NET 6.0 | Runtime |
 | Visual Studio | Development |
 | xUnit / Unit Tests | Testing |
 
@@ -65,15 +71,25 @@ NpcTrackerMod
 │
 ├── Core
 │   ├── ModState
-│   └── NpcPathStore
+│   ├── NpcPathStore
+│   ├── TilePoint
+│   ├── RouteSnapshot (+ RouteSnapshot.IO)
+│   ├── LocalizationHelper
+│   └── ScheduleDisplayHelper
+│
+├── Multiplayer
+│   ├── RouteSync
+│   └── RouteSyncEnvelope
 │
 ├── Rendering
 │   ├── TileRenderer
-│   └── RouteRenderer
+│   ├── RouteRenderer
+│   └── TooltipRenderer
 │
 ├── Scheduling
 │   ├── ScheduleProcessor
 │   ├── ScheduleEntryParser
+│   ├── ScheduleVariantResolver
 │   ├── LocationMapper
 │   ├── JsonUtils
 │   └── CustomScheduleLoader
@@ -83,12 +99,13 @@ NpcTrackerMod
 │   └── NpcRegistry
 │
 ├── UI
-│   ├── TrackingMenu
-│   └── MenuComponents
+│   ├── TrackingMenu (+ вкладки Main/Npc/Settings/Info)
+│   ├── MenuComponents
+│   └── TileInspectMenu
 │
+├── i18n (default.json, ru.json)
 ├── ModEntry.cs
-├── ModConfig.cs
-└── ContentPatcher.cs
+└── ModConfig.cs
 ```
 
 ---
@@ -116,8 +133,7 @@ The project follows a modular architecture where every subsystem has a dedicated
 ### Requirements
 
 - Stardew Valley
-- SMAPI
-- .NET Framework
+- SMAPI (includes the required .NET runtime)
 
 ### Steps
 
@@ -154,9 +170,31 @@ The solution includes a dedicated testing project.
 
 Current tests cover:
 
-- JSON utilities
-- Schedule parsing
+- JSON utilities and schedule parsing
 - Schedule entry validation
+- Snapshot conversion (TilePoint, RouteSnapshot)
+- GZip pack/unpack for multiplayer sync
+
+---
+
+# ⚙ CI & Releases
+
+The repository uses GitHub Actions:
+
+- **`ci.yml`** — builds and runs all tests on Windows, Linux and macOS on every push/PR, and validates the JSON files (manifest + i18n).
+- **`release.yml`** — on a `v*` tag, runs the tests and creates a GitHub release with the release zip.
+
+To publish a release:
+
+1. Bump the version in `NpcTrackerMod/manifest.json` and update `CHANGELOG.md`.
+2. Tag and push:
+
+```bash
+git tag v1.2.0
+git push origin v1.2.0
+```
+
+The mod needs the game's DLLs to compile, so the release workflow downloads them via SteamCMD. To enable the automatic zip build, add the `STEAM_USERNAME` and `STEAM_PASSWORD` repository secrets (Settings → Secrets and variables → Actions). Without them the release is still created, and you attach the zip built locally (it's generated automatically in `NpcTrackerMod/bin/Release/net6.0/` on every build).
 
 ---
 
@@ -174,9 +212,8 @@ Current tests cover:
 # 📈 Possible Future Improvements
 
 - Minimap integration
-- Performance optimizations
-- Custom overlay colors
 - Interactive debugging tools
+- Lazy pull-based multiplayer sync (instead of full daily snapshots)
 
 ---
 
@@ -190,6 +227,12 @@ Rendering:         MonoGame
 Testing:           Unit Tests
 Project Type:      Game Development / Tooling
 ```
+
+---
+
+# 📜 License
+
+This project is licensed under the [MIT License](LICENSE).
 
 ---
 
