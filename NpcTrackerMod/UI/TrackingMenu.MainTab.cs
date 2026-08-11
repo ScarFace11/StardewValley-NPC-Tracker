@@ -14,9 +14,23 @@ namespace NpcTrackerMod.UI
         private Rectangle StepPrevBtn(int navY) => new Rectangle(BX + BOX_W / 2 - 115, navY, 30, 30);
         private Rectangle StepNextBtn(int navY) => new Rectangle(BX + BOX_W / 2 + 85,  navY, 30, 30);
 
-        // Высота навигатора шагов: стрелки (36) + ключ расписания (26) + подсказка (26) = 88.
+        // Таймлайн шагов: кликабельная шкала с отметками шагов и бегунком.
+        private Rectangle TimelineRect(int navY) =>
+            new Rectangle(BX + PAD + 6, navY + 56, BOX_W - PAD * 2 - 12, 16);
+
+        // Высота навигатора шагов: подпись (30) + ключ расписания (22) + таймлайн (20).
         // Константа позволяет точно знать, где начинается блок вариантов.
         private const int STEP_NAV_H = 88;
+
+        // Ключи тултипов для чекбоксов (порядок совпадает с _mainChecks).
+        private static readonly string[] MainCheckTips =
+        {
+            "main.enable.tip",
+            "main.grid.tip",
+            "main.allLocations.tip",
+            "main.globalRoute.tip",
+            "main.stepMode.tip"
+        };
 
         // ── Построение чекбоксов ──────────────────────────────────────────────────────
 
@@ -77,6 +91,7 @@ namespace NpcTrackerMod.UI
             if (_mainChecks.Count < 5) return;
 
             int x = BX + PAD + 6;
+            var mouse = new Point(Game1.getMouseX(), Game1.getMouseY());
 
             int g1Y = _mainChecks[0].Bounds.Y - 30;
             DrawGroupHeader(b, T("main.group.display"), x, g1Y);
@@ -92,49 +107,65 @@ namespace NpcTrackerMod.UI
             _mainChecks[3].Draw(b);
             _mainChecks[4].Draw(b);
 
-            // Навигатор шагов — только когда пошаговый режим активен и есть данные
-            bool showNav = _state.RouteStepMode
-                           && _state.SwitchTargetNPC
-                           && !_state.SwitchGlobalNpcPath
-                           && _state.RouteStepTotal > 0;
+            // Hover-тултипы чекбоксов — только при наведении.
+            for (int i = 0; i < _mainChecks.Count; i++)
+            {
+                if (_mainChecks[i].ContainsPoint(mouse.X, mouse.Y))
+                    _hoverText = T(MainCheckTips[i]);
+            }
 
             int navY = _mainChecks[4].Bounds.Bottom + 14;
 
-            if (showNav)
+            // Пошаговый режим: навигатор или дружелюбная подсказка, что мешает.
+            if (_state.RouteStepMode)
             {
-                DrawArrow(b, StepPrevBtn(navY), left: true);
-                DrawArrow(b, StepNextBtn(navY), left: false);
-
-                string stepLabel = T("main.stepOf", new
+                if (StepNavVisible())
                 {
-                    index = _state.RouteStepIndex + 1,
-                    total = _state.RouteStepTotal,
-                    time  = RouteRenderer.FormatTime(_state.RouteStepTime)
-                });
-                DrawCentered(b, stepLabel, Game1.dialogueFont, navY + 2, new Color(200, 160, 30));
+                    DrawArrow(b, StepPrevBtn(navY), left: true);
+                    DrawArrow(b, StepNextBtn(navY), left: false);
 
-                if (!string.IsNullOrEmpty(_state.RouteStepScheduleKey))
-                    DrawCentered(b,
-                        TruncateToWidth(Game1.smallFont, _state.RouteStepScheduleKey, BOX_W - PAD * 2),
-                        Game1.smallFont, navY + 36, new Color(130, 100, 60));
+                    string stepLabel = T("main.stepOf", new
+                    {
+                        index = _state.RouteStepIndex + 1,
+                        total = _state.RouteStepTotal,
+                        time  = RouteRenderer.FormatTime(_state.RouteStepTime)
+                    });
+                    DrawCentered(b, stepLabel, Game1.dialogueFont, navY + 2, new Color(200, 160, 30));
 
-                if (_state.RouteStepTotal > 1)
-                    DrawCentered(b, T("main.stepHint"), Game1.smallFont, navY + 54, Color.Gray);
+                    if (!string.IsNullOrEmpty(_state.RouteStepScheduleKey))
+                        DrawCentered(b,
+                            TruncateToWidth(Game1.smallFont, _state.RouteStepScheduleKey, BOX_W - PAD * 2),
+                            Game1.smallFont, navY + 34, new Color(130, 100, 60));
+
+                    DrawTimeline(b, navY);
+
+                    // Тултип таймлайна.
+                    if (StepPrevBtn(navY).Contains(mouse.X, mouse.Y) ||
+                        StepNextBtn(navY).Contains(mouse.X, mouse.Y) ||
+                        TimelineRect(navY).Contains(mouse.X, mouse.Y))
+                    {
+                        _hoverText = T("main.stepHint");
+                    }
+                }
+                else
+                {
+                    string hint;
+                    if (!_state.SwitchTargetNPC)
+                        hint = T("main.stepNoNpc");
+                    else if (_state.SwitchGlobalNpcPath)
+                        hint = T("main.stepNoGlobal");
+                    else
+                        hint = T("main.stepNoData");
+
+                    DrawCentered(b, hint, Game1.smallFont, navY, new Color(120, 110, 90));
+                }
             }
 
-            // Селектор вариантов — показывается когда пошаговый режим включён,
+            // Селектор вариантов — когда пошаговый режим включён,
             // выбран NPC и у него есть несколько вариантов расписания.
-            bool showVariants = _state.RouteStepMode
-                                && _state.SwitchTargetNPC
-                                && !_state.SwitchGlobalNpcPath
-                                && HasVariantKeys();
+            if (!VariantsVisible()) return;
 
-            if (!showVariants) return;
-
-            // Блок вариантов начинается ниже навигатора шагов (или ниже checkbox, если нет данных).
-            int variantBlockY = showNav
-                ? navY + STEP_NAV_H + 8
-                : navY + 8;
+            int variantBlockY = VariantsBlockY();
 
             DrawDivider(b, variantBlockY);
             DrawGroupHeader(b, T("main.variant.label"), x, variantBlockY + 10);
@@ -147,39 +178,80 @@ namespace NpcTrackerMod.UI
             DrawVariantChips(b, chips);
         }
 
+        /// <summary> Таймлайн пошагового режима: трек, отметки шагов, бегунок. </summary>
+        private void DrawTimeline(SpriteBatch b, int navY)
+        {
+            var track = TimelineRect(navY);
+            int total = _state.RouteStepTotal;
+            if (total <= 0) return;
+
+            int trackY = track.Y + 4;
+
+            // Трек
+            b.Draw(Game1.staminaRect, new Rectangle(track.X, trackY, track.Width, 8),
+                new Color(180, 155, 100, 130));
+
+            // Отметки шагов
+            for (int i = 0; i < total; i++)
+            {
+                int x = TimelineStepX(i, track);
+                b.Draw(Game1.staminaRect, new Rectangle(x - 1, trackY, 2, 8),
+                    new Color(130, 100, 60, 180));
+            }
+
+            // Заполненная часть до текущего шага
+            int curX = TimelineStepX(_state.RouteStepIndex, track);
+            if (curX > track.X)
+                b.Draw(Game1.staminaRect, new Rectangle(track.X, trackY, curX - track.X, 8),
+                    new Color(200, 160, 30, 170));
+
+            // Бегунок
+            bool hov = track.Contains(Game1.getMouseX(), Game1.getMouseY());
+            b.Draw(Game1.staminaRect, new Rectangle(curX - 5, track.Y, 10, 14),
+                hov ? new Color(240, 195, 40) : new Color(210, 165, 28));
+        }
+
         // ── Обработка кликов ──────────────────────────────────────────────────────────
 
         private void ClickMain(int x, int y, bool playSound)
         {
-            foreach (var cb in _mainChecks)
+            for (int i = 0; i < _mainChecks.Count; i++)
             {
-                if (!cb.ContainsPoint(x, y)) continue;
-                cb.Toggle();
+                if (!_mainChecks[i].ContainsPoint(x, y)) continue;
+                ToggleMainCheck(i);
                 if (playSound) Game1.playSound("drumkit6");
                 return;
             }
 
             // Навигатор шагов — обрабатываем только когда данные загружены
-            if (_state.RouteStepMode && _state.SwitchTargetNPC
-                && !_state.SwitchGlobalNpcPath && _state.RouteStepTotal > 0
-                && _mainChecks.Count >= 5)
+            if (StepNavVisible() && _mainChecks.Count >= 5)
             {
                 int navY = _mainChecks[4].Bounds.Bottom + 14;
-                if (StepPrevBtn(navY).Contains(x, y)) { ChangeStep(-1); if (playSound) Game1.playSound("smallSelect"); return; }
-                if (StepNextBtn(navY).Contains(x, y)) { ChangeStep(+1); if (playSound) Game1.playSound("smallSelect"); return; }
+                if (StepPrevBtn(navY).Contains(x, y))
+                {
+                    ChangeStep(-1);
+                    if (playSound) Game1.playSound("smallSelect");
+                    return;
+                }
+                if (StepNextBtn(navY).Contains(x, y))
+                {
+                    ChangeStep(+1);
+                    if (playSound) Game1.playSound("smallSelect");
+                    return;
+                }
+                if (TimelineRect(navY).Contains(x, y))
+                {
+                    ChangeStepFromX(x, navY);
+                    if (playSound) Game1.playSound("smallSelect");
+                    return;
+                }
             }
 
             // Чипы выбора варианта расписания
-            if (_state.RouteStepMode && _state.SwitchTargetNPC
-                && !_state.SwitchGlobalNpcPath && HasVariantKeys()
-                && _mainChecks.Count >= 5)
+            if (VariantsVisible() && _mainChecks.Count >= 5)
             {
-                bool showNav = _state.RouteStepTotal > 0;
-                int navY     = _mainChecks[4].Bounds.Bottom + 14;
-                int variantBlockY = showNav ? navY + STEP_NAV_H + 8 : navY + 8;
-
                 int chipStartX = BX + PAD + 6;
-                int chipStartY = variantBlockY + 34;
+                int chipStartY = VariantsBlockY() + 34;
                 int chipMaxW   = BOX_W - PAD * 2 - 12;
 
                 var chips = ComputeVariantChipRects(chipStartX, chipStartY, chipMaxW);
@@ -196,6 +268,43 @@ namespace NpcTrackerMod.UI
 
         // ── Утилиты ───────────────────────────────────────────────────────────────────
 
+        /// <summary> Видимость навигатора шагов: режим включён, NPC выбран, есть шаги. </summary>
+        private bool StepNavVisible() =>
+            _state.RouteStepMode
+            && _state.SwitchTargetNPC
+            && !_state.SwitchGlobalNpcPath
+            && _state.RouteStepTotal > 0;
+
+        /// <summary> Видимость блока вариантов расписания. </summary>
+        private bool VariantsVisible() =>
+            _state.RouteStepMode
+            && _state.SwitchTargetNPC
+            && !_state.SwitchGlobalNpcPath
+            && HasVariantKeys();
+
+        /// <summary> Y верхней границы блока вариантов (зависит от видимости навигатора). </summary>
+        private int VariantsBlockY()
+        {
+            if (_mainChecks.Count < 5) return 0;
+            int navY = _mainChecks[4].Bounds.Bottom + 14;
+            return StepNavVisible() ? navY + STEP_NAV_H + 8 : navY + 8;
+        }
+
+        /// <summary> X бегунка таймлайна для шага <paramref name="stepIndex"/>. </summary>
+        private int TimelineStepX(int stepIndex, Rectangle track)
+        {
+            if (_state.RouteStepTotal <= 1) return track.X + track.Width / 2;
+            float t = (float)stepIndex / (_state.RouteStepTotal - 1);
+            return track.X + (int)(t * track.Width);
+        }
+
+        /// <summary> Переключает чекбокс по индексу (общий путь для мыши и геймпада). </summary>
+        private void ToggleMainCheck(int index)
+        {
+            if (index < 0 || index >= _mainChecks.Count) return;
+            _mainChecks[index].Toggle();
+        }
+
         /// <summary> Переключает шаг маршрута и инициирует перерисовку тайлов. </summary>
         private void ChangeStep(int delta)
         {
@@ -204,6 +313,32 @@ namespace NpcTrackerMod.UI
                 _state.RouteStepIndex + delta, 0, _state.RouteStepTotal - 1);
             _tiles.Clear();
             _state.SwitchGetNpcPath = true;
+        }
+
+        /// <summary> Переход к конкретному шагу (клик по таймлайну, геймпад). </summary>
+        private void ChangeStepTo(int index)
+        {
+            if (_state.RouteStepTotal <= 0) return;
+            _state.RouteStepIndex = MathHelper.Clamp(
+                index, 0, _state.RouteStepTotal - 1);
+            _tiles.Clear();
+            _state.SwitchGetNpcPath = true;
+        }
+
+        /// <summary> Геймпад на таймлайне: следующий шаг. </summary>
+        private void ChangeStepToNext() => ChangeStep(+1);
+
+        /// <summary> Переход к шагу по позиции мыши на таймлайне. </summary>
+        private void ChangeStepFromX(int mouseX, int navY)
+        {
+            if (_state.RouteStepTotal <= 0) return;
+            var track = TimelineRect(navY);
+            float t = MathHelper.Clamp(
+                (float)(mouseX - track.X) / track.Width, 0f, 1f);
+            int idx = _state.RouteStepTotal <= 1
+                ? 0
+                : (int)Math.Round(t * (_state.RouteStepTotal - 1));
+            ChangeStepTo(idx);
         }
 
         /// <summary>

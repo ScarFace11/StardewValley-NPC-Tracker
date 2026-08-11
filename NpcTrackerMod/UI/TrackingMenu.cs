@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using Microsoft.Xna.Framework.Input;
 using NpcTrackerMod.Core;
 using NpcTrackerMod.Rendering;
 using NpcTrackerMod.Tracking;
@@ -63,6 +64,10 @@ namespace NpcTrackerMod.UI
         private int    _positionColorIndex;
         private bool   _draggingAlpha;
 
+        // Прокрутка окна, когда оно выше вьюпорта
+        private int  _menuScroll;
+        private bool _draggingMenuScroll;
+
         // Кеш группировки NPC по источникам (вкладка «Инфо»).
         // Пересчитывается только при изменении состава источников, а не каждый кадр.
         private List<(string Source, int Count)> _sourceGroupCache;
@@ -70,6 +75,17 @@ namespace NpcTrackerMod.UI
 
         // Кнопка закрытия
         private ClickableTextureComponent _closeBtn;
+
+        // Hover-тултип текущего кадра — устанавливается в draw вкладок,
+        // рисуется в конце draw (только при наведении, без постоянного текста).
+        private string _hoverText;
+
+        // Геймпад: интерактивные регионы текущей вкладки + индекс фокуса.
+        // Список пересобирается при перестроении вкладки (RebuildTab).
+        private readonly List<(Rectangle Rect, Action Action)> _interactive
+            = new List<(Rectangle, Action)>();
+        private int  _snapIndex;
+        private bool _gamepadActive;
 
         // Короткие ссылки на позиции окна
         private int BX => xPositionOnScreen;
@@ -109,6 +125,8 @@ namespace NpcTrackerMod.UI
 
             _routeColorIndex    = ColorIndexOf(_config.RouteColor);
             _positionColorIndex = ColorIndexOf(_config.PositionColor);
+            _customRouteColor   = ModConfig.ParseColor(_config.RouteColor, Color.Green);
+            _customPosColor     = ModConfig.ParseColor(_config.PositionColor, Color.Blue);
 
             Game1.game1.Window.TextInput += OnWindowTextInput;
 
@@ -148,12 +166,81 @@ namespace NpcTrackerMod.UI
 
         private void InitPosition()
         {
-            xPositionOnScreen = Game1.viewport.Width  / 2 - BOX_W / 2;
-            yPositionOnScreen = Game1.viewport.Height / 2 - BOX_H / 2;
+            // Центрируем по горизонтали.
+            xPositionOnScreen = Math.Max(8,
+                Math.Min(Game1.viewport.Width  / 2 - BOX_W / 2,
+                         Math.Max(8, Game1.viewport.Width  - BOX_W - 8)));
+
+            // По вертикали: если окно помещается целиком — центрируем;
+            // если оно выше вьюпорта — верх прижат к 8, а содержимое
+            // прокручивается полоской справа (_menuScroll).
+            int visibleH = Game1.viewport.Height - 16;
+            if (BOX_H <= visibleH)
+            {
+                _menuScroll = 0;
+                yPositionOnScreen = Math.Max(8,
+                    Math.Min(Game1.viewport.Height / 2 - BOX_H / 2,
+                             Math.Max(8, visibleH - BOX_H + 8)));
+            }
+            else
+            {
+                _menuScroll = MathHelper.Clamp(_menuScroll, 0, MaxMenuScroll);
+                yPositionOnScreen = 8 - _menuScroll;
+            }
 
             _closeBtn = new ClickableTextureComponent(
                 new Rectangle(BX + BOX_W - 48, BY - 8, 48, 48),
                 Game1.mouseCursors, new Rectangle(337, 494, 12, 12), 4f);
+        }
+
+        // ── Прокрутка окна (когда оно выше вьюпорта) ─────────────────────────────────
+
+        /// <summary> Насколько окно выше вьюпорта (0 — помещается целиком). </summary>
+        private int MaxMenuScroll => Math.Max(0, BOX_H - (Game1.viewport.Height - 16));
+
+        /// <summary> Полоска прокрутки справа от окна, фиксирована на экране. </summary>
+        private Rectangle MenuScrollTrackRect()
+        {
+            int x = Math.Min(BX + BOX_W + 6, Game1.viewport.Width - 14);
+            return new Rectangle(x, 8, 8, Game1.viewport.Height - 16);
+        }
+
+        private int MenuScrollThumbH()
+        {
+            var track = MenuScrollTrackRect();
+            return Math.Max(20, track.Height * track.Height / BOX_H);
+        }
+
+        private int MenuScrollThumbY()
+        {
+            var track = MenuScrollTrackRect();
+            int max   = MaxMenuScroll;
+            if (max <= 0) return track.Y;
+            return track.Y + (track.Height - MenuScrollThumbH()) * _menuScroll / max;
+        }
+
+        private void DrawMenuScrollbar(SpriteBatch b)
+        {
+            var track = MenuScrollTrackRect();
+            b.Draw(Game1.staminaRect, track, new Color(180, 165, 140, 100));
+            b.Draw(Game1.staminaRect,
+                new Rectangle(track.X, MenuScrollThumbY(), track.Width, MenuScrollThumbH()),
+                new Color(130, 100, 60, 200));
+        }
+
+        private void ApplyMenuScrollFromY(int y)
+        {
+            int max = MaxMenuScroll;
+            if (max <= 0) return;
+
+            var  track  = MenuScrollTrackRect();
+            int  thumbH = MenuScrollThumbH();
+            int  range  = Math.Max(1, track.Height - thumbH);
+            float t = MathHelper.Clamp(
+                (float)(y - track.Y - thumbH / 2f) / range, 0f, 1f);
+
+            _menuScroll = (int)Math.Round(t * max);
+            yPositionOnScreen = 8 - _menuScroll;
         }
 
         private void RebuildTab()
@@ -163,6 +250,166 @@ namespace NpcTrackerMod.UI
 
             if (_activeTab == 0) BuildMainChecks();
             if (_activeTab == 1) RebuildNpcFilter();
+
+            RebuildInteractive();
+        }
+
+        /// <summary>
+        /// Переключает вкладку (мышь, клавиатура и геймпад используют один путь).
+        /// </summary>
+        private void SwitchTab(int tab)
+        {
+            int next = (tab + _tabLabels.Length) % _tabLabels.Length;
+            if (_activeTab == next) return;
+
+            _activeTab     = next;
+            _searchFocused = false;
+            _rebindTarget  = null;
+            _pickingColor  = null;
+            RebuildTab();
+            Game1.playSound("shwip");
+        }
+
+        // ── Геймпад: интерактивные регионы ───────────────────────────────────────
+
+        /// <summary>
+        /// Пересобирает список интерактивных регионов текущей вкладки.
+        /// Прямоугольники совпадают с теми, что используют обработчики кликов, —
+        /// фокус-рамка и клики геймпадом бьют ровно в те же элементы.
+        /// </summary>
+        private void RebuildInteractive()
+        {
+            _interactive.Clear();
+            _snapIndex = 0;
+
+            switch (_activeTab)
+            {
+                case 0:
+                    for (int i = 0; i < _mainChecks.Count; i++)
+                    {
+                        int idx = i;
+                        _interactive.Add((_mainChecks[i].Bounds, () => ToggleMainCheck(idx)));
+                    }
+
+                    if (StepNavVisible() && _mainChecks.Count >= 5)
+                    {
+                        int navY = _mainChecks[4].Bounds.Bottom + 14;
+                        _interactive.Add((StepPrevBtn(navY), () => ChangeStep(-1)));
+                        _interactive.Add((StepNextBtn(navY), () => ChangeStep(+1)));
+                        _interactive.Add((TimelineRect(navY), () => ChangeStepToNext()));
+                    }
+
+                    if (VariantsVisible() && _mainChecks.Count >= 5)
+                    {
+                        int chipStartX = BX + PAD + 6;
+                        int chipStartY = VariantsBlockY() + 34;
+                        int chipMaxW   = BOX_W - PAD * 2 - 12;
+
+                        foreach (var (key, rect) in ComputeVariantChipRects(chipStartX, chipStartY, chipMaxW))
+                        {
+                            string k = key;
+                            _interactive.Add((rect, () => SelectVariant(k)));
+                        }
+                    }
+                    break;
+
+                case 1:
+                    _interactive.Add((NpcSearchRect(), FocusNpcSearch));
+
+                    foreach (var (_, mod, rect) in _modChips)
+                    {
+                        string m = mod;
+                        _interactive.Add((rect, () => ToggleModFilter(m)));
+                    }
+
+                    _interactive.Add((NpcResetBtnRect(), ResetNpcSelection));
+
+                    int listW = BOX_W - PAD * 2;
+                    for (int i = _npcScrollOffset;
+                         i < Math.Min(_npcScrollOffset + NPC_VISIBLE, _filteredNpcs.Count);
+                         i++)
+                    {
+                        int idx = i;
+                        _interactive.Add((
+                            NpcRowRect(idx - _npcScrollOffset, listW),
+                            () => ToggleNpcRow(idx)));
+                    }
+                    break;
+
+                case 2:
+                    _interactive.Add((MenuKeyBtnRect(),      () => StartRebind("menu")));
+                    _interactive.Add((DebugKeyBtnRect(),     () => StartRebind("debug")));
+                    _interactive.Add((SelectNpcKeyBtnRect(), () => StartRebind("select")));
+                    _interactive.Add((TimePrevBtn(), () => ChangeTimeFilter(-1)));
+                    _interactive.Add((TimeNextBtn(), () => ChangeTimeFilter(+1)));
+                    _interactive.Add((TimeTrackHitRect(), () => ApplyTimeSliderX(SliderThumbX())));
+                    _interactive.Add((ColorPrevBtn(RouteColorRowY), () => CycleRouteColor(-1)));
+                    _interactive.Add((ColorNextBtn(RouteColorRowY), () => CycleRouteColor(+1)));
+                    _interactive.Add((ColorPrevBtn(PosColorRowY),   () => CyclePosColor(-1)));
+                    _interactive.Add((ColorNextBtn(PosColorRowY),   () => CyclePosColor(+1)));
+                    _interactive.Add((AlphaTrackHitRect(), () => ApplyAlphaSliderX(AlphaThumbX())));
+                    _interactive.Add((ResetSettingsBtnRect(), ResetSettings));
+                    break;
+            }
+        }
+
+        private void MoveSnap(int delta)
+        {
+            if (_interactive.Count == 0) return;
+            _snapIndex = (_snapIndex + delta + _interactive.Count) % _interactive.Count;
+            Game1.playSound("smallSelect");
+        }
+
+        private void ActivateSnapped()
+        {
+            if (_interactive.Count == 0) return;
+            _interactive[_snapIndex].Action?.Invoke();
+        }
+
+        public override void receiveGamePadButton(Buttons b)
+        {
+            _gamepadActive = true;
+            try
+            {
+                switch (b)
+                {
+                    case Buttons.LeftShoulder:
+                    case Buttons.LeftTrigger:
+                        SwitchTab(_activeTab - 1);
+                        break;
+                    case Buttons.RightShoulder:
+                    case Buttons.RightTrigger:
+                        SwitchTab(_activeTab + 1);
+                        break;
+                    case Buttons.DPadUp:
+                    case Buttons.LeftThumbstickUp:
+                        MoveSnap(-1);
+                        break;
+                    case Buttons.DPadDown:
+                    case Buttons.LeftThumbstickDown:
+                        MoveSnap(+1);
+                        break;
+                    case Buttons.DPadLeft:
+                    case Buttons.LeftThumbstickLeft:
+                        MoveSnap(-1);
+                        break;
+                    case Buttons.DPadRight:
+                    case Buttons.LeftThumbstickRight:
+                        MoveSnap(+1);
+                        break;
+                    case Buttons.A:
+                        ActivateSnapped();
+                        break;
+                    case Buttons.B:
+                        exitThisMenu();
+                        Game1.playSound("bigDeSelect");
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                _monitor.Log($"Ошибка обработки геймпада в меню: {ex.Message}", LogLevel.Error);
+            }
         }
 
         // ── Позиции вкладок ───────────────────────────────────────────────────────────
@@ -179,6 +426,8 @@ namespace NpcTrackerMod.UI
         {
             try
             {
+                _hoverText = null;
+
                 drawTextureBox(b, Game1.menuTexture, new Rectangle(0, 256, 60, 60),
                     BX, BY, BOX_W, BOX_H, Color.White, 1f, true);
 
@@ -193,7 +442,18 @@ namespace NpcTrackerMod.UI
                     case 3: DrawInfoTab(b);     break;
                 }
 
+                DrawSnapFocus(b);
+
+                // Полоска прокрутки, если окно выше вьюпорта.
+                if (MaxMenuScroll > 0)
+                    DrawMenuScrollbar(b);
+
                 _closeBtn.draw(b);
+
+                // Hover-тултип — только когда курсор над элементом с подсказкой.
+                if (!string.IsNullOrEmpty(_hoverText))
+                    IClickableMenu.drawHoverText(b, _hoverText, Game1.smallFont);
+
                 drawMouse(b);
             }
             catch (Exception ex)
@@ -202,6 +462,19 @@ namespace NpcTrackerMod.UI
                 base.draw(b);
                 drawMouse(b);
             }
+        }
+
+        /// <summary> Рисует золотую рамку вокруг элемента, сфокусированного геймпадом. </summary>
+        private void DrawSnapFocus(SpriteBatch b)
+        {
+            if (!_gamepadActive || _interactive.Count == 0) return;
+            if (_snapIndex >= _interactive.Count) return;
+
+            var r = _interactive[_snapIndex].Rect;
+            b.Draw(Game1.staminaRect, new Rectangle(r.X - 2, r.Y - 2, r.Width + 4, 2), Color.Gold);
+            b.Draw(Game1.staminaRect, new Rectangle(r.X - 2, r.Bottom, r.Width + 4, 2), Color.Gold);
+            b.Draw(Game1.staminaRect, new Rectangle(r.X - 2, r.Y - 2, 2, r.Height + 4), Color.Gold);
+            b.Draw(Game1.staminaRect, new Rectangle(r.Right, r.Y - 2, 2, r.Height + 4), Color.Gold);
         }
 
         private void DrawSideTabs(SpriteBatch b)
@@ -241,16 +514,19 @@ namespace NpcTrackerMod.UI
                     return;
                 }
 
+                // Полоска прокрутки окна
+                if (MaxMenuScroll > 0 && MenuScrollTrackRect().Contains(x, y))
+                {
+                    _draggingMenuScroll = true;
+                    ApplyMenuScrollFromY(y);
+                    if (playSound) Game1.playSound("smallSelect");
+                    return;
+                }
+
                 for (int i = 0; i < _tabLabels.Length; i++)
                 {
                     if (!TabRect(i).Contains(x, y)) continue;
-                    if (_activeTab != i)
-                    {
-                        _activeTab     = i;
-                        _searchFocused = false;
-                        RebuildTab();
-                        if (playSound) Game1.playSound("shwip");
-                    }
+                    SwitchTab(i);
                     return;
                 }
 
@@ -269,6 +545,7 @@ namespace NpcTrackerMod.UI
 
         public override void leftClickHeld(int x, int y)
         {
+            if (_draggingMenuScroll) ApplyMenuScrollFromY(y);
             if (_activeTab == 2)
             {
                 if (_draggingSlider) ApplyTimeSliderX(x);
@@ -279,8 +556,9 @@ namespace NpcTrackerMod.UI
 
         public override void releaseLeftClick(int x, int y)
         {
-            _draggingSlider = false;
-            _draggingAlpha  = false;
+            _draggingMenuScroll = false;
+            _draggingSlider     = false;
+            _draggingAlpha      = false;
             base.releaseLeftClick(x, y);
         }
 
@@ -320,10 +598,7 @@ namespace NpcTrackerMod.UI
                 key == Microsoft.Xna.Framework.Input.Keys.Right)
             {
                 int dir = key == Microsoft.Xna.Framework.Input.Keys.Right ? 1 : -1;
-                _activeTab = (_activeTab + dir + _tabLabels.Length) % _tabLabels.Length;
-                _searchFocused = false;
-                RebuildTab();
-                Game1.playSound("shwip");
+                SwitchTab(_activeTab + dir);
                 return;
             }
 
@@ -353,10 +628,13 @@ namespace NpcTrackerMod.UI
                 return;
             }
 
-            if (_activeTab == 2)
+            // Настройки: колёсико больше не меняет фильтр времени.
+            // Если окно выше вьюпорта — колесо прокручивает меню.
+            if (MaxMenuScroll > 0)
             {
-                ChangeTimeFilter(direction > 0 ? -1 : 1);
-                Game1.playSound("smallSelect");
+                _menuScroll = MathHelper.Clamp(
+                    _menuScroll + (direction > 0 ? -24 : 24), 0, MaxMenuScroll);
+                yPositionOnScreen = 8 - _menuScroll;
             }
         }
 

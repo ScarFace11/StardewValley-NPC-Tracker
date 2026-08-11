@@ -40,6 +40,10 @@ namespace NpcTrackerMod.UI
         private List<(string label, string mod, Rectangle rect)> _modChips
             = new List<(string label, string mod, Rectangle rect)>();
 
+        // Кеш портретов по имени NPC — вместо LINQ-поиска по GameNpcs на каждый кадр.
+        private Dictionary<string, Texture2D> _portraitCache
+            = new Dictionary<string, Texture2D>();
+
         // ── Фильтрация ────────────────────────────────────────────────────────────────
 
         private void RebuildNpcFilter()
@@ -59,7 +63,26 @@ namespace NpcTrackerMod.UI
             _npcScrollOffset = Math.Max(0,
                 Math.Min(_npcScrollOffset, Math.Max(0, _filteredNpcs.Count - NPC_VISIBLE)));
 
-            _modChips = ComputeModChipRects();
+            _modChips      = ComputeModChipRects();
+            _portraitCache = BuildPortraitCache();
+        }
+
+        /// <summary>
+        /// Собирает портреты всех известных NPC один раз за перестроение списка
+        /// (вместо FirstOrDefault по GameNpcs в каждом кадре для каждой строки).
+        /// </summary>
+        private Dictionary<string, Texture2D> BuildPortraitCache()
+        {
+            var cache = new Dictionary<string, Texture2D>();
+            if (_registry.GameNpcs == null) return cache;
+
+            foreach (var npc in _registry.GameNpcs)
+            {
+                if (npc?.Name == null || cache.ContainsKey(npc.Name)) continue;
+                if (npc.Portrait != null)
+                    cache[npc.Name] = npc.Portrait;
+            }
+            return cache;
         }
 
         /// <summary>
@@ -193,13 +216,12 @@ namespace NpcTrackerMod.UI
 
                 float  textY   = row.Y + (row.Height - Game1.dialogueFont.MeasureString("A").Y) / 2f;
                 int    textX   = row.X + 10;
-                var    gameNpc = _registry.GameNpcs?.FirstOrDefault(n => n?.Name == npc);
 
-                if (gameNpc?.Portrait != null)
+                if (_portraitCache.TryGetValue(npc, out Texture2D portrait))
                 {
                     int ava  = Math.Min((int)Game1.dialogueFont.MeasureString("A").Y, row.Height - 4);
                     int avaY = row.Y + (row.Height - ava) / 2;
-                    b.Draw(gameNpc.Portrait,
+                    b.Draw(portrait,
                         new Rectangle(textX, avaY, ava, ava),
                         new Rectangle(0, 0, 64, 64),
                         Color.White);
@@ -286,7 +308,7 @@ namespace NpcTrackerMod.UI
         {
             if (NpcSearchRect().Contains(x, y))
             {
-                _searchFocused = true;
+                FocusNpcSearch();
                 return;
             }
             _searchFocused = false;
@@ -296,8 +318,7 @@ namespace NpcTrackerMod.UI
             {
                 if (!rect.Contains(x, y)) continue;
 
-                _npcModFilter = _npcModFilter == mod ? null : mod;
-                RebuildNpcFilter();
+                ToggleModFilter(mod);
                 if (playSound) Game1.playSound("smallSelect");
                 return;
             }
@@ -305,15 +326,7 @@ namespace NpcTrackerMod.UI
             // Кнопка «Сбросить выбор»
             if (NpcResetBtnRect().Contains(x, y))
             {
-                _registry.SelectedNpcNames.Clear();
-                _registry.CurrentNpcName   = null;
-                _state.SwitchTargetNPC     = false;
-                _state.SelectedVariantKey  = null;
-                _state.SwitchBuildVariant  = false;
-                _tiles.Clear();
-                _registry.CurrentNpcList.Clear();
-                _state.SwitchGetNpcPath = true;
-                _state.SwitchListFull   = false;
+                ResetNpcSelection();
                 if (playSound) Game1.playSound("bigDeSelect");
                 return;
             }
@@ -325,36 +338,66 @@ namespace NpcTrackerMod.UI
                 var row = NpcRowRect(i - _npcScrollOffset, listW);
                 if (!row.Contains(x, y)) continue;
 
-                string name = _filteredNpcs[i];
-                if (_state.SwitchTargetNPC && _registry.SelectedNpcNames.Contains(name))
-                {
-                    _registry.SelectedNpcNames.Remove(name);
-                    if (_registry.SelectedNpcNames.Count == 0)
-                    {
-                        _state.SwitchTargetNPC   = false;
-                        _registry.CurrentNpcName = null;
-                    }
-                }
-                else
-                {
-                    _state.SwitchTargetNPC = true;
-                    _registry.SelectedNpcNames.Add(name);
-                    _registry.CurrentNpcName = name;
-                    _state.NpcSelected = i;
-                }
-
-                // При смене NPC сбрасываем выбранный вариант расписания,
-                // так как варианты у разных NPC не совпадают.
-                _state.SelectedVariantKey = null;
-                _state.SwitchBuildVariant = false;
-
-                _tiles.Clear();
-                _registry.CurrentNpcList.Clear();
-                _state.SwitchGetNpcPath = true;
-                _state.SwitchListFull   = false;
+                ToggleNpcRow(i);
                 if (playSound) Game1.playSound("drumkit6");
                 return;
             }
+        }
+
+        // ── Общие операции (мышь и геймпад используют один путь) ───────────────────────
+
+        private void FocusNpcSearch() => _searchFocused = true;
+
+        private void ToggleModFilter(string mod)
+        {
+            _npcModFilter = _npcModFilter == mod ? null : mod;
+            RebuildNpcFilter();
+        }
+
+        private void ResetNpcSelection()
+        {
+            _registry.SelectedNpcNames.Clear();
+            _registry.CurrentNpcName   = null;
+            _state.SwitchTargetNPC     = false;
+            _state.SelectedVariantKey  = null;
+            _state.SwitchBuildVariant  = false;
+            _tiles.Clear();
+            _registry.CurrentNpcList.Clear();
+            _state.SwitchGetNpcPath = true;
+            _state.SwitchListFull   = false;
+        }
+
+        private void ToggleNpcRow(int index)
+        {
+            if (index < 0 || index >= _filteredNpcs.Count) return;
+
+            string name = _filteredNpcs[index];
+            if (_state.SwitchTargetNPC && _registry.SelectedNpcNames.Contains(name))
+            {
+                _registry.SelectedNpcNames.Remove(name);
+                if (_registry.SelectedNpcNames.Count == 0)
+                {
+                    _state.SwitchTargetNPC   = false;
+                    _registry.CurrentNpcName = null;
+                }
+            }
+            else
+            {
+                _state.SwitchTargetNPC = true;
+                _registry.SelectedNpcNames.Add(name);
+                _registry.CurrentNpcName = name;
+                _state.NpcSelected = index;
+            }
+
+            // При смене NPC сбрасываем выбранный вариант расписания,
+            // так как варианты у разных NPC не совпадают.
+            _state.SelectedVariantKey = null;
+            _state.SwitchBuildVariant = false;
+
+            _tiles.Clear();
+            _registry.CurrentNpcList.Clear();
+            _state.SwitchGetNpcPath = true;
+            _state.SwitchListFull   = false;
         }
 
         // ── Утилиты ───────────────────────────────────────────────────────────────────

@@ -201,7 +201,9 @@ namespace NpcTrackerMod
                     Game1.activeClickableMenu = new TileInspectMenu(
                         Monitor, _state, _registry,
                         tile, owners, _registry.GameNpcs, Helper.Translation,
-                        ToggleNpc);
+                        ToggleNpc,
+                        locationName: Game1.currentLocation?.Name,
+                        onOpenInMenu: OpenInspectorNpcInMenu);
 
                     Helper.Input.Suppress(e.Button);
                     Game1.playSound("smallSelect");
@@ -329,6 +331,28 @@ namespace NpcTrackerMod
             _registry.CurrentNpcList.Clear();
             _state.SwitchGetNpcPath = true;
             _state.SwitchListFull   = false;
+        }
+
+        /// <summary>
+        /// Закрывает инспектор и открывает главное меню с выбранным NPC.
+        /// Вызывается из TileInspectMenu кнопкой «Меню».
+        /// </summary>
+        private void OpenInspectorNpcInMenu(string npcName)
+        {
+            if (!_registry.SelectedNpcNames.Contains(npcName))
+            {
+                _registry.SelectedNpcNames.Add(npcName);
+                _registry.CurrentNpcName = npcName;
+            }
+
+            _state.SwitchTargetNPC = _registry.SelectedNpcNames.Count > 0;
+            _tileRenderer.Clear();
+            _registry.CurrentNpcList.Clear();
+            _state.SwitchGetNpcPath = true;
+            _state.SwitchListFull   = false;
+
+            Game1.activeClickableMenu?.exitThisMenu();
+            OpenMenu();
         }
 
         // ── Утилиты ───────────────────────────────────────────────────────────────

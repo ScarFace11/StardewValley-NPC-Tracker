@@ -28,6 +28,9 @@ namespace NpcTrackerMod.Tracking
         /// <summary> Имя последнего выбранного NPC (сохраняется при RefreshCurrentNpcList). </summary>
         public string CurrentNpcName { get; set; }
 
+        /// <summary> Доступ к хранилищу путей (нужен UI для тайминговых данных маршрутов). </summary>
+        public NpcPathStore Store => _store;
+
         /// <summary> Множество NPC, выбранных для одновременного отслеживания. </summary>
         public HashSet<string> SelectedNpcNames { get; } = new HashSet<string>();
 
