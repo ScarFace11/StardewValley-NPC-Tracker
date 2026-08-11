@@ -12,7 +12,10 @@ namespace NpcTrackerMod.Core
     public partial class RouteSnapshot
     {
         /// <summary> Текущая версия формата снимка. </summary>
-        public const int CurrentVersion = 1;
+        // v2: глобальные пути исключены из ежедневных снапшотов (передаются
+        // один раз за сессию); старые клиенты при несовпадении версии уходят
+        // на локальное построение вместо применения пустых глобальных путей.
+        public const int CurrentVersion = 2;
 
         /// <summary> Версия снимка; проверяется получателем перед применением. </summary>
         public int Version { get; set; } = CurrentVersion;

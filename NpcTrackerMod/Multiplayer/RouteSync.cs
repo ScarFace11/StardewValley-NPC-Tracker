@@ -32,9 +32,6 @@ namespace NpcTrackerMod.Multiplayer
         private readonly NpcTracker _tracker;
         private readonly Action _populateModSources;
 
-        // Кэш снапшота текущего дня — переиспользуется при подключении новых игроков.
-        private RouteSnapshot _cachedSnapshot;
-
         // Снапшот, полученный до готовности мира/рендереров — применяется в DayStarted.
         private RouteSnapshot _pendingSnapshot;
 
@@ -99,13 +96,16 @@ namespace NpcTrackerMod.Multiplayer
         }
 
         /// <summary>
-        /// Хост: строит снапшот дня, кэширует и рассылает всем фарм-хэндам.
+        /// Хост: строит снапшот дня и рассылает всем фарм-хэндам.
+        /// Глобальные пути в ежедневную рассылку не включаются — они строятся
+        /// один раз за сессию, и фарм-хэнд сохраняет полученные ранее
+        /// (см. RouteSnapshot.ApplyTo). Это заметно уменьшает размер пакета.
         /// </summary>
         public void BroadcastDayRoutes()
         {
             if (!Context.IsMultiplayer) return;
             _dayActive = true;
-            SendSnapshot(RouteSnapshot.Capture(_store, _registry), null);
+            SendSnapshot(RouteSnapshot.Capture(_store, _registry, includeGlobalPaths: false), null);
         }
 
         /// <summary> Вызывается при завершении дня: отменяет ожидание и фолбэк. </summary>
@@ -117,16 +117,15 @@ namespace NpcTrackerMod.Multiplayer
         }
 
         /// <summary>
-        /// Хост: отправляет кэшированный снапшот игроку, подключившемуся посреди дня.
+        /// Хост: отправляет игроку, подключившемуся посреди дня, ПОЛНЫЙ снапшот
+        /// (с глобальными путями) — в ежедневной рассылке их нет, и у новичка
+        /// без полного снимка глобальный режим остался бы пустым.
         /// </summary>
         public void SendSnapshotToPeer(long playerId)
         {
             if (!Context.IsMultiplayer) return;
 
-            if (_cachedSnapshot == null)
-                _cachedSnapshot = RouteSnapshot.Capture(_store, _registry);
-
-            SendSnapshot(_cachedSnapshot, new[] { playerId });
+            SendSnapshot(RouteSnapshot.Capture(_store, _registry), new[] { playerId });
         }
 
         /// <summary> Тикает каждый апдейт: запускает фолбэк, если снапшот так и не пришёл. </summary>
@@ -192,7 +191,6 @@ namespace NpcTrackerMod.Multiplayer
         {
             try
             {
-                _cachedSnapshot = snapshot;
                 var envelope = RouteSyncEnvelope.Pack(snapshot);
 
                 _helper.Multiplayer.SendMessage(

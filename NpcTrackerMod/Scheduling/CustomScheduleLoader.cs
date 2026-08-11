@@ -84,25 +84,41 @@ namespace NpcTrackerMod.Scheduling
         public void TransferToProcessor()
         {
             var knownNames = _registry.GameNpcs != null
-                ? new HashSet<string>(_registry.GameNpcs.Select(n => n.Name))
-                : new HashSet<string>();
+                ? new HashSet<string>(_registry.GameNpcs.Select(n => n.Name), StringComparer.OrdinalIgnoreCase)
+                : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             foreach (var npcEntry in _rawPaths)
             {
-                string npcName = npcEntry.Key;
+                string rawName = npcEntry.Key;
 
-                if (!knownNames.Contains(npcName))
+                // Имя в файле мода может отличаться регистром от игрового
+                // ("abigail" вместо "Abigail"). Ищем каноничное написание
+                // и дальше используем только его — иначе расписание молча
+                // пропускалось бы, а источник мода не совпадал по ключу.
+                string actualName = knownNames.FirstOrDefault(
+                    n => string.Equals(n, rawName, StringComparison.OrdinalIgnoreCase));
+
+                if (actualName == null)
                 {
                     _monitor.Log(
-                        $"Пропуск кастомного расписания: '{npcName}' не является активным NPC",
+                        $"Пропуск кастомного расписания: '{rawName}' не является активным NPC",
                         LogLevel.Debug);
                     continue;
+                }
+
+                // Источник мода тоже ключуем по игровому имени, чтобы вкладка NPC
+                // находила его при отображении (TotalNpcList содержит игровые имена).
+                if (NpcModNames.TryGetValue(rawName, out string modName) &&
+                    !string.Equals(rawName, actualName, StringComparison.Ordinal))
+                {
+                    NpcModNames.Remove(rawName);
+                    NpcModNames[actualName] = modName;
                 }
 
                 foreach (var scheduleEntry in npcEntry.Value)
                 {
                     foreach (var path in scheduleEntry.Value)
-                        _processor.BuildGlobalRoute(null, npcName, path, scheduleEntry.Key);
+                        _processor.BuildGlobalRoute(null, actualName, path, scheduleEntry.Key);
                 }
             }
         }

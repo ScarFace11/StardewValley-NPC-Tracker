@@ -86,8 +86,10 @@ namespace NpcTrackerMod.Tests
         public void Pack_CompressesPayload()
         {
             // Полный снапшот с тайминговыми путями избыточен — сжатие должно
-            // дать заметный выигрыш по сравнению с сырым JSON.
-            var snapshot = SampleSnapshot();
+            // дать заметный выигрыш по сравнению с сырым JSON. Выборка должна
+            // быть реалистичной: на крошечных снапшотах накладные расходы gzip
+            // сравнимы с самими данными, и тест оказывается на границе порога.
+            var snapshot = RepetitiveSnapshot();
             string rawJson = JsonConvert.SerializeObject(snapshot);
 
             var envelope = RouteSyncEnvelope.Pack(snapshot);
@@ -130,6 +132,51 @@ namespace NpcTrackerMod.Tests
 
         private static string Serialize(RouteSnapshot snapshot)
             => JsonConvert.SerializeObject(snapshot);
+
+        /// <summary>
+        /// Реалистичный по объёму снапшот: 10 NPC с дневными, глобальными
+        /// и тайминговыми путями (≈15 тыс. тайлов) — тайлы сильно избыточны,
+        /// поэтому gzip даёт стабильный многократный выигрыш.
+        /// </summary>
+        private static RouteSnapshot RepetitiveSnapshot()
+        {
+            var snapshot = new RouteSnapshot();
+
+            for (int n = 0; n < 10; n++)
+            {
+                string name = "NPC" + n;
+
+                var locs = new Dictionary<string, List<TilePoint>>
+                {
+                    { "Town", RepetitiveTiles(100, 0) },
+                    { "Beach", RepetitiveTiles(100, 1000) },
+                    { "Mountain", RepetitiveTiles(100, 2000) }
+                };
+                snapshot.DayPaths[name] = locs;
+                snapshot.GlobalPaths[name] = locs;
+
+                var timed = new Dictionary<int, Dictionary<string, List<TilePoint>>>();
+                for (int t = 0; t < 6; t++)
+                {
+                    timed[600 + t * 100] = new Dictionary<string, List<TilePoint>>
+                    {
+                        { "Town", RepetitiveTiles(100, t) },
+                        { "Beach", RepetitiveTiles(100, t + 500) }
+                    };
+                }
+                snapshot.TimedDayPaths[name] = timed;
+            }
+
+            return snapshot;
+        }
+
+        private static List<TilePoint> RepetitiveTiles(int count, int offset)
+        {
+            var list = new List<TilePoint>(count);
+            for (int i = 0; i < count; i++)
+                list.Add(new TilePoint(i % 40, (i * 7 + offset) % 40));
+            return list;
+        }
 
         private static RouteSnapshot SampleSnapshot()
         {

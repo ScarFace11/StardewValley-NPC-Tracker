@@ -12,7 +12,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <!-- Пин на версию, которую предоставляет SMAPI (smapi-internal): рантайм-привязка идёт к ней. -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
     <PackageReference Include="Pathoschild.Stardew.ModBuildConfig" Version="4.4.0" />
   </ItemGroup>
 

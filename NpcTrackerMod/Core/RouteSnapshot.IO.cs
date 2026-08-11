@@ -11,14 +11,23 @@ namespace NpcTrackerMod.Core
     {
         /// <summary>
         /// Собирает полный снимок из хранилища и реестра. Вызывается хостом.
+        /// Глобальные пути строятся один раз за сессию и не меняются, поэтому
+        /// в ежедневную рассылку их можно не включать (includeGlobalPaths: false) —
+        /// фарм-хэнд сохраняет полученные ранее. Для подключившихся посреди дня
+        /// нужен полный снимок, иначе у них не будет глобальных путей.
         /// </summary>
-        public static RouteSnapshot Capture(NpcPathStore store, NpcRegistry registry)
+        public static RouteSnapshot Capture(
+            NpcPathStore store,
+            NpcRegistry registry,
+            bool includeGlobalPaths = true)
         {
             var snapshot = new RouteSnapshot
             {
                 Version = CurrentVersion,
                 DayPaths = ToListPaths(store.DayPaths),
-                GlobalPaths = ToListPaths(store.GlobalPaths),
+                GlobalPaths = includeGlobalPaths
+                    ? ToListPaths(store.GlobalPaths)
+                    : new Dictionary<string, Dictionary<string, List<TilePoint>>>(),
                 TimedDayPaths = ToListTimedPaths(store.TimedDayPaths),
                 VariantTimedPaths = ToListVariantPaths(store.VariantTimedPaths),
                 ActiveScheduleKeys = new Dictionary<string, string>(store.ActiveScheduleKeys)
@@ -56,13 +65,19 @@ namespace NpcTrackerMod.Core
                 ActiveScheduleKeys ?? new Dictionary<string, string>());
 
             // Фаза 2: замена (не может выбросить исключение).
-            // ClearAll также сбрасывает кеши отсортированных шагов.
-            store.ClearAll();
+            // ClearDay сбрасывает дневные данные и кеши шагов, но не трогает
+            // глобальные пути: в ежедневных снапшотах (со 2-го дня) их нет,
+            // и фарм-хэнд должен сохранить полученные ранее.
+            store.ClearDay();
 
             foreach (var kvp in dayPaths)
                 store.DayPaths[kvp.Key] = kvp.Value;
-            foreach (var kvp in globalPaths)
-                store.GlobalPaths[kvp.Key] = kvp.Value;
+            if (globalPaths.Count > 0)
+            {
+                store.GlobalPaths.Clear();
+                foreach (var kvp in globalPaths)
+                    store.GlobalPaths[kvp.Key] = kvp.Value;
+            }
             foreach (var kvp in timedDayPaths)
                 store.TimedDayPaths[kvp.Key] = kvp.Value;
             foreach (var kvp in variantTimedPaths)
