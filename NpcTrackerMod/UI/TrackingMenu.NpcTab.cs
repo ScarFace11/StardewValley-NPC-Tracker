@@ -67,6 +67,19 @@ namespace NpcTrackerMod.UI
                     _registry.NpcModSource.TryGetValue(n, out string src) &&
                     src == _npcModFilter);
 
+            if (_availableOnly)
+            {
+                var currentLoc = Game1.currentLocation?.Name;
+                if (!string.IsNullOrEmpty(currentLoc))
+                {
+                    all = all.Where(n =>
+                    {
+                        var npc = FindNpc(n);
+                        return npc?.currentLocation?.Name == currentLoc;
+                    });
+                }
+            }
+
             _filteredNpcs = all.OrderBy(n => n).ToList();
             _npcScrollOffset = Math.Max(0,
                 Math.Min(_npcScrollOffset, Math.Max(0, _filteredNpcs.Count - NPC_VISIBLE)));
@@ -156,7 +169,6 @@ namespace NpcTrackerMod.UI
             DrawNpcList(b);
             if (_filteredNpcs.Count > NPC_VISIBLE)
                 DrawScrollbar(b);
-            DrawSelectedNpcPanel(b);
         }
 
         private void DrawSearchBox(SpriteBatch b)
@@ -346,88 +358,6 @@ namespace NpcTrackerMod.UI
                 new Vector2(rect.X + (rect.Width - sz.X) / 2f,
                             rect.Y + (rect.Height - sz.Y) / 2f),
                 textColor);
-        }
-
-        /// <summary>
-        /// Draw the selected NPC info panel at the bottom of the NPC tab.
-        /// Shows: portrait, name, location, status, Track/Untrack and Map buttons.
-        /// </summary>
-        private void DrawSelectedNpcPanel(SpriteBatch b)
-        {
-            if (!_state.SwitchTargetNPC || _registry.SelectedNpcNames.Count == 0)
-                return;
-
-            string selectedNpc = _registry.CurrentNpcName;
-            if (string.IsNullOrEmpty(selectedNpc)) return;
-
-            int panelY = NpcInfoY;
-            int panelH = 80;
-            var panel = new Rectangle(BX + PAD, panelY, BOX_W - PAD * 2, panelH);
-
-            // Panel background
-            drawTextureBox(b, Game1.menuTexture, new Rectangle(0, 256, 60, 60),
-                panel.X, panel.Y, panel.Width, panel.Height, CardBg, 1f, false);
-
-            // Section header
-            Utility.drawTextWithShadow(b, T("npc.info.title"), Game1.smallFont,
-                new Vector2(panel.X + 12, panel.Y + 8), TextSecondary);
-
-            int py = panel.Y + 28;
-
-            // Portrait
-            int portraitSize = 40;
-            if (_portraitCache.TryGetValue(selectedNpc, out Texture2D portrait))
-            {
-                b.Draw(portrait,
-                    new Rectangle(panel.X + 14, py, portraitSize, portraitSize),
-                    new Rectangle(0, 0, 64, 64),
-                    Color.White);
-            }
-
-            int textX = panel.X + 14 + portraitSize + 10;
-
-            // NPC name (bold)
-            Utility.drawTextWithShadow(b, selectedNpc, Game1.dialogueFont,
-                new Vector2(textX, py + 2), Game1.textColor);
-
-            // Location and status
-            if (_npcInfoCache.TryGetValue(selectedNpc, out var info))
-            {
-                string loc = info.Location;
-                string statusText = info.Status switch
-                {
-                    NpcStatus.Available => T("npc.status.available"),
-                    NpcStatus.Leaving => T("npc.status.leaving"),
-                    NpcStatus.Unavailable => T("npc.status.unavailable"),
-                    _ => T("npc.status.offline")
-                };
-                string infoText = !string.IsNullOrEmpty(loc) ? loc + " · " + statusText : statusText;
-                Utility.drawTextWithShadow(b, infoText, Game1.smallFont,
-                    new Vector2(textX, py + 26), new Color(150, 140, 125));
-            }
-
-            // Track/Untrack button
-            bool isTracking = _registry.SelectedNpcNames.Contains(selectedNpc);
-            var trackBtn = new Rectangle(panel.Right - 130, py, 120, 30);
-            bool trackHov = trackBtn.Contains(Game1.getMouseX(), Game1.getMouseY());
-
-            Color trackBg = isTracking
-                ? (trackHov ? new Color(190, 55, 35) : new Color(215, 72, 52))
-                : (trackHov ? new Color(65, 138, 50) : new Color(48, 118, 36));
-
-            drawTextureBox(b, Game1.menuTexture, new Rectangle(0, 256, 60, 60),
-                trackBtn.X, trackBtn.Y, trackBtn.Width, trackBtn.Height,
-                trackBg, 0.8f, false);
-
-            string trackLabel = isTracking ? T("npc.info.untrack") : T("npc.info.track");
-            var trackSz = Game1.smallFont.MeasureString(trackLabel);
-            Utility.drawTextWithShadow(b, trackLabel, Game1.smallFont,
-                new Vector2(
-                    trackBtn.X + (trackBtn.Width - trackSz.X) / 2f,
-                    trackBtn.Y + (trackBtn.Height - trackSz.Y) / 2f),
-                Color.White);
-
-            if (trackHov) _hoverText = isTracking ? T("npc.info.untrack") : T("npc.info.track");
         }
 
         // ── Click handling ──────────────────────────────────────────────────────────
