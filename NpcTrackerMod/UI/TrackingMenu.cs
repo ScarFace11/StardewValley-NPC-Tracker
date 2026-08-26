@@ -129,6 +129,10 @@ namespace NpcTrackerMod.UI
             _customRouteColor   = ModConfig.ParseColor(_config.RouteColor, Color.Green);
             _customPosColor     = ModConfig.ParseColor(_config.PositionColor, Color.Blue);
 
+            // Восстанавливаем последнюю открытую вкладку
+            int savedTab = _config.LastActiveTab;
+            _activeTab = (savedTab >= 0 && savedTab < _tabLabels.Length) ? savedTab : 0;
+
             Game1.game1.Window.TextInput += OnWindowTextInput;
 
             InitPosition();
@@ -269,6 +273,10 @@ namespace NpcTrackerMod.UI
             _pickingColor  = null;
             RebuildTab();
             Game1.playSound("shwip");
+
+            // Запоминаем последнюю открытую вкладку
+            _config.LastActiveTab = next;
+            _saveConfig();
         }
 
         // ── Геймпад: интерактивные регионы ───────────────────────────────────────

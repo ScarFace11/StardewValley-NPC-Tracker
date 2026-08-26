@@ -35,6 +35,9 @@ namespace NpcTrackerMod
         /// </summary>
         public string PositionColor { get; set; } = "Blue";
 
+        /// <summary> Индекс последней открытой вкладки меню (0–3). </summary>
+        public int LastActiveTab { get; set; } = 0;
+
         // ── Утилиты ───────────────────────────────────────────────────────────────
 
         /// <summary> Восстанавливает значения по умолчанию (кнопка сброса в настройках). </summary>
