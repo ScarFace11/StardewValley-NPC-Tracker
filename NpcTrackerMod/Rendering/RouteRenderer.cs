@@ -171,35 +171,17 @@ namespace NpcTrackerMod.Rendering
 
                 var routeColor = RouteColor;
 
-                if (_state.SwitchGlobalNpcPath)
+                // Фильтруем по локации NPC — покажем маршрут только на той карте,
+                // где NPC реально находится. Иначе тайлы с координатами другой
+                // карты окажутся мусором на текущей карте (внутри зданий).
+                string npcLoc = npc.currentLocation?.Name ?? string.Empty;
+                if (pathData.TryGetValue(npcLoc, out var tileSet))
                 {
-                    // В глобальном режиме рисуем ВСЕ локации из маршрута NPC,
-                    // чтобы пользователь видел полный путь через все локации.
-                    foreach (var locEntry in pathData)
+                    foreach (var coord in tileSet)
                     {
-                        foreach (var coord in locEntry.Value)
-                        {
-                            var tile = new Point(coord.X, coord.Y);
-                            _tiles.MarkTile(tile, routeColor, 2);
-                            _tiles.RegisterOwner(tile, npc.Name, timeLabel);
-                        }
-                    }
-                }
-                else
-                {
-                    // Обычный режим: показываем только текущую локацию.
-                    string targetLocation = _state.SwitchTargetLocations
-                        ? (Game1.player.currentLocation?.Name ?? string.Empty)
-                        : (npc.currentLocation?.Name ?? string.Empty);
-
-                    if (pathData.TryGetValue(targetLocation, out var tileSet))
-                    {
-                        foreach (var coord in tileSet)
-                        {
-                            var tile = new Point(coord.X, coord.Y);
-                            _tiles.MarkTile(tile, routeColor, 2);
-                            _tiles.RegisterOwner(tile, npc.Name, timeLabel);
-                        }
+                        var tile = new Point(coord.X, coord.Y);
+                        _tiles.MarkTile(tile, routeColor, 2);
+                        _tiles.RegisterOwner(tile, npc.Name, timeLabel);
                     }
                 }
             }
