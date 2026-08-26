@@ -115,6 +115,11 @@ namespace NpcTrackerMod.Rendering
             {
                 if (!_state.SwitchGetNpcPath || npc == null) return;
 
+                // Не рисуем маршрут NPC, если он находится в другой локации.
+                // Координаты тайлов другой карты некорректны на текущей карте
+                // (особенно внутри зданий — тайлы Town/Farm/Forest = мусор).
+                if (Game1.currentLocation != npc.currentLocation) return;
+
                 // Пошаговый режим перехватывает управление до стандартной логики.
                 // Работает только для дневного маршрута (TimedDayPaths / VariantTimedPaths).
                 if (_state.RouteStepMode && !_state.SwitchGlobalNpcPath)
