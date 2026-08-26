@@ -74,8 +74,17 @@ namespace NpcTrackerMod.Tracking
         {
             var prevName = CurrentNpcName;
 
+            // Защита от null: Game1.currentLocation может быть null в загрузочном экране
+            var characters = Game1.currentLocation?.characters;
+            if (characters == null || characters.Count == 0)
+            {
+                CurrentNpcList = new List<string>();
+                CurrentNpcName = null;
+                return;
+            }
+
             var inLocation = new HashSet<string>(
-                Game1.currentLocation.characters.Select(n => n.Name));
+                characters.Select(n => n.Name));
 
             CurrentNpcList = TotalNpcList
                 .Where(n => inLocation.Contains(n))

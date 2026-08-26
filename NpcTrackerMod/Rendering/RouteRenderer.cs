@@ -169,23 +169,37 @@ namespace NpcTrackerMod.Rendering
                     return;
                 }
 
-                // В глобальном режиме всегда смотрим тайлы по локации игрока —
-                // так отображаются маршруты ВСЕХ NPC через текущую карту,
-                // независимо от того, где они находятся прямо сейчас.
-                string targetLocation = (_state.SwitchGlobalNpcPath || _state.SwitchTargetLocations)
-                    ? (Game1.player.currentLocation?.Name ?? string.Empty)
-                    : (npc.currentLocation?.Name ?? string.Empty);
+                var routeColor = RouteColor;
 
-                if (pathData.TryGetValue(targetLocation, out var tileSet))
+                if (_state.SwitchGlobalNpcPath)
                 {
-                    var routeColor = RouteColor;
-                    foreach (var coord in tileSet)
+                    // В глобальном режиме рисуем ВСЕ локации из маршрута NPC,
+                    // чтобы пользователь видел полный путь через все локации.
+                    foreach (var locEntry in pathData)
                     {
-                        var tile = new Point(coord.X, coord.Y);
-                        _tiles.MarkTile(tile, routeColor, 2);
-                        // timeLabel остаётся null для обычных маршрутов —
-                        // тултип покажет только имя NPC без лишней метки
-                        _tiles.RegisterOwner(tile, npc.Name, timeLabel);
+                        foreach (var coord in locEntry.Value)
+                        {
+                            var tile = new Point(coord.X, coord.Y);
+                            _tiles.MarkTile(tile, routeColor, 2);
+                            _tiles.RegisterOwner(tile, npc.Name, timeLabel);
+                        }
+                    }
+                }
+                else
+                {
+                    // Обычный режим: показываем только текущую локацию.
+                    string targetLocation = _state.SwitchTargetLocations
+                        ? (Game1.player.currentLocation?.Name ?? string.Empty)
+                        : (npc.currentLocation?.Name ?? string.Empty);
+
+                    if (pathData.TryGetValue(targetLocation, out var tileSet))
+                    {
+                        foreach (var coord in tileSet)
+                        {
+                            var tile = new Point(coord.X, coord.Y);
+                            _tiles.MarkTile(tile, routeColor, 2);
+                            _tiles.RegisterOwner(tile, npc.Name, timeLabel);
+                        }
                     }
                 }
             }

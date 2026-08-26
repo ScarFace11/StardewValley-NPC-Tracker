@@ -427,7 +427,7 @@ namespace NpcTrackerMod.UI
                     trackBtn.Y + (trackBtn.Height - trackSz.Y) / 2f),
                 Color.White);
 
-            if (trackHov) _hoverText = isTracking ? T("npc.hint.noSelection") : T("main.enable.tip");
+            if (trackHov) _hoverText = isTracking ? T("npc.info.untrack") : T("npc.info.track");
         }
 
         // ── Click handling ──────────────────────────────────────────────────────────
