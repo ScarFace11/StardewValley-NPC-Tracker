@@ -8,15 +8,19 @@ using StardewValley.Menus;
 
 namespace NpcTrackerMod.UI
 {
-    /// <summary> Вкладка «NPC»: поиск, фильтр по модам, список NPC с выбором. </summary>
+    /// <summary>
+    /// "Residents" tab: search with magnifying glass, filter chips,
+    /// NPC list with color indicators + location/time, selected NPC info panel.
+    /// </summary>
     public partial class TrackingMenu
     {
-        // ── Размеры ───────────────────────────────────────────────────────────────────
+        // ── Layout constants ──────────────────────────────────────────────────────────
         private const int RESET_BTN_W = 130;
-        private const int CHIP_H      = 28;
-        private const int CHIP_GAP    = 6;
+        private const int CHIP_H = 28;
+        private const int CHIP_GAP = 6;
+        private const int INDICATOR_SIZE = 12;
 
-        // ── Позиции элементов вкладки ─────────────────────────────────────────────────
+        // ── Element positions ─────────────────────────────────────────────────────────
         private Rectangle NpcSearchRect() =>
             new Rectangle(BX + PAD, BY + 56, BOX_W - PAD * 2 - RESET_BTN_W - 8, 42);
 
@@ -25,26 +29,30 @@ namespace NpcTrackerMod.UI
 
         private int NpcFilterY => NpcSearchRect().Bottom + 8;
 
-        // Разделитель и список опускаются ниже чипов фильтров (чипы могут переноситься).
         private int NpcDividerY => _modChips.Count == 0
             ? NpcFilterY + CHIP_H + 6
             : _modChips[_modChips.Count - 1].rect.Bottom + 8;
 
         private int NpcCountY => NpcDividerY + 12;
-        private int NpcListY  => NpcCountY + 24;
+        private int NpcListY => NpcCountY + 24;
+        private int NpcInfoY => NpcListY + (NPC_VISIBLE * NPC_ROW_H) + 8;
 
         private Rectangle NpcRowRect(int visualIdx, int listW) =>
             new Rectangle(BX + PAD, NpcListY + visualIdx * NPC_ROW_H, listW, NPC_ROW_H - 2);
 
-        // Кеш чипов фильтра по источникам — пересчитывается вместе со списком.
+        // Filter chips cache
         private List<(string label, string mod, Rectangle rect)> _modChips
             = new List<(string label, string mod, Rectangle rect)>();
 
-        // Кеш портретов по имени NPC — вместо LINQ-поиска по GameNpcs на каждый кадр.
+        // Portrait cache (built once per rebuild, not per frame)
         private Dictionary<string, Texture2D> _portraitCache
             = new Dictionary<string, Texture2D>();
 
-        // ── Фильтрация ────────────────────────────────────────────────────────────────
+        // NPC location/time cache for indicators
+        private Dictionary<string, (string Location, int Time, NpcStatus Status)> _npcInfoCache
+            = new Dictionary<string, (string, int, NpcStatus)>();
+
+        // ── Filter rebuild ───────────────────────────────────────────────────────────
 
         private void RebuildNpcFilter()
         {
@@ -59,18 +67,15 @@ namespace NpcTrackerMod.UI
                     _registry.NpcModSource.TryGetValue(n, out string src) &&
                     src == _npcModFilter);
 
-            _filteredNpcs    = all.OrderBy(n => n).ToList();
+            _filteredNpcs = all.OrderBy(n => n).ToList();
             _npcScrollOffset = Math.Max(0,
                 Math.Min(_npcScrollOffset, Math.Max(0, _filteredNpcs.Count - NPC_VISIBLE)));
 
-            _modChips      = ComputeModChipRects();
+            _modChips = ComputeModChipRects();
             _portraitCache = BuildPortraitCache();
+            _npcInfoCache = BuildNpcInfoCache();
         }
 
-        /// <summary>
-        /// Собирает портреты всех известных NPC один раз за перестроение списка
-        /// (вместо FirstOrDefault по GameNpcs в каждом кадре для каждой строки).
-        /// </summary>
         private Dictionary<string, Texture2D> BuildPortraitCache()
         {
             var cache = new Dictionary<string, Texture2D>();
@@ -85,19 +90,40 @@ namespace NpcTrackerMod.UI
             return cache;
         }
 
-        /// <summary>
-        /// Считает прямоугольники чипов фильтров с переносом на следующую строку.
-        /// Единый источник правды для отрисовки и обработки кликов.
-        /// </summary>
+        private Dictionary<string, (string Location, int Time, NpcStatus Status)> BuildNpcInfoCache()
+        {
+            var cache = new Dictionary<string, (string, int, NpcStatus)>();
+            foreach (string name in _registry.TotalNpcList)
+            {
+                var npc = FindNpc(name);
+                string loc = npc?.currentLocation?.Name ?? "";
+                int time = _state.TimeFilter;
+                var status = GetNpcStatus(name, time);
+                cache[name] = (loc, time, status);
+            }
+            return cache;
+        }
+
+        private NPC FindNpc(string name)
+        {
+            if (_registry.GameNpcs == null) return null;
+            foreach (var n in _registry.GameNpcs)
+            {
+                if (n?.Name == name) return n;
+            }
+            return null;
+        }
+
         private List<(string label, string mod, Rectangle rect)> ComputeModChipRects()
         {
             var result = new List<(string label, string mod, Rectangle rect)>();
 
-            int cx   = BX + PAD;
-            int cy   = NpcFilterY;
+            int cx = BX + PAD;
+            int cy = NpcFilterY;
             int maxW = BX + PAD + (BOX_W - PAD * 2);
 
             AddModChip(ref cx, ref cy, maxW, result, T("npc.filter.all"), null);
+            AddModChip(ref cx, ref cy, maxW, result, T("npc.filter.available"), "__available__");
             foreach (string g in ModGroups())
                 AddModChip(ref cx, ref cy, maxW, result, g, g);
 
@@ -110,7 +136,7 @@ namespace NpcTrackerMod.UI
             int w = (int)Game1.smallFont.MeasureString(label).X + 16;
             if (cx + w > maxW && cx != BX + PAD)
             {
-                cx  = BX + PAD;
+                cx = BX + PAD;
                 cy += CHIP_H + 6;
             }
 
@@ -118,7 +144,7 @@ namespace NpcTrackerMod.UI
             cx += w + CHIP_GAP;
         }
 
-        // ── Отрисовка ─────────────────────────────────────────────────────────────────
+        // ── Draw ─────────────────────────────────────────────────────────────────────
 
         private void DrawNpcTab(SpriteBatch b)
         {
@@ -130,33 +156,38 @@ namespace NpcTrackerMod.UI
             DrawNpcList(b);
             if (_filteredNpcs.Count > NPC_VISIBLE)
                 DrawScrollbar(b);
+            DrawSelectedNpcPanel(b);
         }
 
         private void DrawSearchBox(SpriteBatch b)
         {
-            var  rect  = NpcSearchRect();
+            var rect = NpcSearchRect();
 
             drawTextureBox(b, Game1.menuTexture, new Rectangle(0, 256, 60, 60),
                 rect.X, rect.Y, rect.Width, rect.Height,
                 _searchFocused ? Color.White : new Color(245, 240, 228), 1f, false);
 
-            bool   empty       = string.IsNullOrEmpty(_npcSearch);
+            // Magnifying glass icon
+            DrawSearchIcon(b, rect.X + 8, rect.Y + 10, 22);
+
+            bool empty = string.IsNullOrEmpty(_npcSearch);
             string placeholder = T("npc.search.placeholder");
-            string display     = empty && !_searchFocused
+            string display = empty && !_searchFocused
                 ? placeholder
                 : _npcSearch + (_searchFocused ? "|" : "");
-            Color  textColor   = empty && !_searchFocused ? Color.Gray : Game1.textColor;
+            Color textColor = empty && !_searchFocused ? Color.Gray : Game1.textColor;
 
             float textY = rect.Y + (rect.Height - Game1.smallFont.MeasureString("A").Y) / 2f;
             Utility.drawTextWithShadow(b, display, Game1.smallFont,
-                new Vector2(rect.X + 10, textY), textColor);
+                new Vector2(rect.X + 34, textY), textColor);
         }
 
         private void DrawModChips(SpriteBatch b)
         {
             foreach (var (label, mod, rect) in _modChips)
             {
-                bool active = mod == _npcModFilter;
+                bool active = mod == _npcModFilter ||
+                              (mod == "__available__" && _availableOnly);
 
                 var bg = active
                     ? new Color(255, 215, 120)
@@ -165,22 +196,20 @@ namespace NpcTrackerMod.UI
                 drawTextureBox(b, Game1.menuTexture, new Rectangle(0, 256, 60, 60),
                     rect.X, rect.Y, rect.Width, rect.Height, bg, 0.85f, false);
 
-                // Обрезаем текст по ширине чипа.
                 string shown = TruncateToWidth(
                     Game1.smallFont, label, rect.Width - 16);
-                var    sz    = Game1.smallFont.MeasureString(shown);
+                var sz = Game1.smallFont.MeasureString(shown);
                 Utility.drawTextWithShadow(b, shown, Game1.smallFont,
                     new Vector2(rect.X + 8, rect.Y + (rect.Height - sz.Y) / 2f),
                     active ? new Color(110, 65, 15) : Game1.textColor);
             }
         }
 
-        /// <summary> Строка счётчиков: сколько NPC видно/всего и сколько выбрано. </summary>
         private void DrawNpcCount(SpriteBatch b)
         {
-            int total     = _registry.TotalNpcList.Count;
-            int shown     = _filteredNpcs.Count;
-            bool filtered = _npcModFilter != null || !string.IsNullOrEmpty(_npcSearch);
+            int total = _registry.TotalNpcList.Count;
+            int shown = _filteredNpcs.Count;
+            bool filtered = _npcModFilter != null || !string.IsNullOrEmpty(_npcSearch) || _availableOnly;
 
             string text = filtered
                 ? T("npc.countFiltered", new { shown, total })
@@ -190,7 +219,6 @@ namespace NpcTrackerMod.UI
                 text += "   ·   " + T("npc.selectedCount",
                     new { count = _registry.SelectedNpcNames.Count });
 
-            // Не даём строке выйти за рамки меню.
             string shownText = TruncateToWidth(
                 Game1.smallFont, text, BOX_W - PAD * 2);
             Utility.drawTextWithShadow(b, shownText, Game1.smallFont,
@@ -199,37 +227,47 @@ namespace NpcTrackerMod.UI
 
         private void DrawNpcList(SpriteBatch b)
         {
-            int   listW = BOX_W - PAD * 2;
-            int   end   = Math.Min(_npcScrollOffset + NPC_VISIBLE, _filteredNpcs.Count);
-            var   mouse = new Point(Game1.getMouseX(), Game1.getMouseY());
+            int listW = BOX_W - PAD * 2;
+            int end = Math.Min(_npcScrollOffset + NPC_VISIBLE, _filteredNpcs.Count);
+            var mouse = new Point(Game1.getMouseX(), Game1.getMouseY());
 
             for (int i = _npcScrollOffset; i < end; i++)
             {
-                string npc      = _filteredNpcs[i];
-                bool   selected = _state.SwitchTargetNPC && _registry.SelectedNpcNames.Contains(npc);
-                var    row      = NpcRowRect(i - _npcScrollOffset, listW);
+                string npc = _filteredNpcs[i];
+                bool selected = _state.SwitchTargetNPC && _registry.SelectedNpcNames.Contains(npc);
+                var row = NpcRowRect(i - _npcScrollOffset, listW);
 
+                // Row background
                 if (selected)
                     b.Draw(Game1.staminaRect, row, new Color(255, 215, 90, 90));
                 else if (row.Contains(mouse))
-                    b.Draw(Game1.staminaRect, row, new Color(200, 195, 180, 55));
+                    b.Draw(Game1.staminaRect, row, HoverBg);
 
-                float  textY   = row.Y + (row.Height - Game1.dialogueFont.MeasureString("A").Y) / 2f;
-                int    textX   = row.X + 10;
+                int contentX = row.X + 10;
+                float textY = row.Y + (row.Height - Game1.dialogueFont.MeasureString("A").Y) / 2f;
 
-                if (_portraitCache.TryGetValue(npc, out Texture2D portrait))
+                // Status indicator dot
+                if (_npcInfoCache.TryGetValue(npc, out var info))
                 {
-                    int ava  = Math.Min((int)Game1.dialogueFont.MeasureString("A").Y, row.Height - 4);
-                    int avaY = row.Y + (row.Height - ava) / 2;
-                    b.Draw(portrait,
-                        new Rectangle(textX, avaY, ava, ava),
-                        new Rectangle(0, 0, 64, 64),
-                        Color.White);
-                    textX += ava + 6;
+                    DrawStatusDot(b, contentX, row.Y + (row.Height - INDICATOR_SIZE) / 2,
+                        INDICATOR_SIZE, info.Status);
+                    contentX += INDICATOR_SIZE + 8;
                 }
 
-                // Имя обрезается, чтобы не наезжать на источник справа.
-                int nameMaxW = listW - textX - 8;
+                // Portrait
+                if (_portraitCache.TryGetValue(npc, out Texture2D portrait))
+                {
+                    int ava = Math.Min((int)Game1.dialogueFont.MeasureString("A").Y, row.Height - 4);
+                    int avaY = row.Y + (row.Height - ava) / 2;
+                    b.Draw(portrait,
+                        new Rectangle(contentX, avaY, ava, ava),
+                        new Rectangle(0, 0, 64, 64),
+                        Color.White);
+                    contentX += ava + 6;
+                }
+
+                // Name (bold)
+                int nameMaxW = listW - contentX - 8;
                 if (_registry.NpcModSource.TryGetValue(npc, out string src))
                 {
                     int srcW = (int)Game1.smallFont.MeasureString(src).X;
@@ -238,15 +276,24 @@ namespace NpcTrackerMod.UI
 
                 Utility.drawTextWithShadow(b,
                     TruncateToWidth(Game1.dialogueFont, npc, nameMaxW),
-                    Game1.dialogueFont, new Vector2(textX, textY),
+                    Game1.dialogueFont, new Vector2(contentX, textY),
                     selected ? new Color(120, 70, 10) : Game1.textColor);
 
-                if (_registry.NpcModSource.TryGetValue(npc, out src))
+                // Location and time (gray, small)
+                if (_npcInfoCache.TryGetValue(npc, out var npcInfo))
                 {
-                    var   srcSz = Game1.smallFont.MeasureString(src);
-                    float srcY  = row.Y + (row.Height - srcSz.Y) / 2f;
-                    Utility.drawTextWithShadow(b, src, Game1.smallFont,
-                        new Vector2(row.Right - srcSz.X - 10, srcY), Color.Gray);
+                    string locTime = npcInfo.Location;
+                    if (!string.IsNullOrEmpty(locTime) && npcInfo.Time >= 0)
+                        locTime += " " + FormatGameTime(npcInfo.Time);
+
+                    if (!string.IsNullOrEmpty(locTime))
+                    {
+                        var locSz = Game1.smallFont.MeasureString(locTime);
+                        float locX = row.Right - locSz.X - 10;
+                        float locY = row.Y + (row.Height - locSz.Y) / 2f;
+                        Utility.drawTextWithShadow(b, locTime, Game1.smallFont,
+                            new Vector2(locX, locY), new Color(150, 140, 125));
+                    }
                 }
             }
 
@@ -259,7 +306,6 @@ namespace NpcTrackerMod.UI
             }
             else if (!(_state.SwitchTargetNPC && _registry.SelectedNpcNames.Count > 0))
             {
-                // Ничего не выбрано — подсказываем, с чего начать.
                 int hintY = NpcListY + Math.Min(NPC_VISIBLE, _filteredNpcs.Count) * NPC_ROW_H + 10;
                 DrawCentered(b, T("npc.hint.noSelection"), Game1.smallFont,
                     hintY, new Color(120, 110, 90));
@@ -283,7 +329,7 @@ namespace NpcTrackerMod.UI
 
         private void DrawResetButton(SpriteBatch b)
         {
-            var  rect         = NpcResetBtnRect();
+            var rect = NpcResetBtnRect();
             bool hasSelection = _state.SwitchTargetNPC && _registry.SelectedNpcNames.Count > 0;
 
             var bgColor = hasSelection
@@ -295,14 +341,96 @@ namespace NpcTrackerMod.UI
                 rect.X, rect.Y, rect.Width, rect.Height, bgColor, 0.85f, false);
 
             string label = T("npc.reset");
-            var    sz    = Game1.smallFont.MeasureString(label);
+            var sz = Game1.smallFont.MeasureString(label);
             Utility.drawTextWithShadow(b, label, Game1.smallFont,
-                new Vector2(rect.X + (rect.Width  - sz.X) / 2f,
+                new Vector2(rect.X + (rect.Width - sz.X) / 2f,
                             rect.Y + (rect.Height - sz.Y) / 2f),
                 textColor);
         }
 
-        // ── Обработка кликов ──────────────────────────────────────────────────────────
+        /// <summary>
+        /// Draw the selected NPC info panel at the bottom of the NPC tab.
+        /// Shows: portrait, name, location, status, Track/Untrack and Map buttons.
+        /// </summary>
+        private void DrawSelectedNpcPanel(SpriteBatch b)
+        {
+            if (!_state.SwitchTargetNPC || _registry.SelectedNpcNames.Count == 0)
+                return;
+
+            string selectedNpc = _registry.CurrentNpcName;
+            if (string.IsNullOrEmpty(selectedNpc)) return;
+
+            int panelY = NpcInfoY;
+            int panelH = 80;
+            var panel = new Rectangle(BX + PAD, panelY, BOX_W - PAD * 2, panelH);
+
+            // Panel background
+            drawTextureBox(b, Game1.menuTexture, new Rectangle(0, 256, 60, 60),
+                panel.X, panel.Y, panel.Width, panel.Height, CardBg, 1f, false);
+
+            // Section header
+            Utility.drawTextWithShadow(b, T("npc.info.title"), Game1.smallFont,
+                new Vector2(panel.X + 12, panel.Y + 8), TextSecondary);
+
+            int py = panel.Y + 28;
+
+            // Portrait
+            int portraitSize = 40;
+            if (_portraitCache.TryGetValue(selectedNpc, out Texture2D portrait))
+            {
+                b.Draw(portrait,
+                    new Rectangle(panel.X + 14, py, portraitSize, portraitSize),
+                    new Rectangle(0, 0, 64, 64),
+                    Color.White);
+            }
+
+            int textX = panel.X + 14 + portraitSize + 10;
+
+            // NPC name (bold)
+            Utility.drawTextWithShadow(b, selectedNpc, Game1.dialogueFont,
+                new Vector2(textX, py + 2), Game1.textColor);
+
+            // Location and status
+            if (_npcInfoCache.TryGetValue(selectedNpc, out var info))
+            {
+                string loc = info.Location;
+                string statusText = info.Status switch
+                {
+                    NpcStatus.Available => T("npc.status.available"),
+                    NpcStatus.Leaving => T("npc.status.leaving"),
+                    NpcStatus.Unavailable => T("npc.status.unavailable"),
+                    _ => T("npc.status.offline")
+                };
+                string infoText = !string.IsNullOrEmpty(loc) ? loc + " · " + statusText : statusText;
+                Utility.drawTextWithShadow(b, infoText, Game1.smallFont,
+                    new Vector2(textX, py + 26), new Color(150, 140, 125));
+            }
+
+            // Track/Untrack button
+            bool isTracking = _registry.SelectedNpcNames.Contains(selectedNpc);
+            var trackBtn = new Rectangle(panel.Right - 130, py, 120, 30);
+            bool trackHov = trackBtn.Contains(Game1.getMouseX(), Game1.getMouseY());
+
+            Color trackBg = isTracking
+                ? (trackHov ? new Color(190, 55, 35) : new Color(215, 72, 52))
+                : (trackHov ? new Color(65, 138, 50) : new Color(48, 118, 36));
+
+            drawTextureBox(b, Game1.menuTexture, new Rectangle(0, 256, 60, 60),
+                trackBtn.X, trackBtn.Y, trackBtn.Width, trackBtn.Height,
+                trackBg, 0.8f, false);
+
+            string trackLabel = isTracking ? T("npc.info.untrack") : T("npc.info.track");
+            var trackSz = Game1.smallFont.MeasureString(trackLabel);
+            Utility.drawTextWithShadow(b, trackLabel, Game1.smallFont,
+                new Vector2(
+                    trackBtn.X + (trackBtn.Width - trackSz.X) / 2f,
+                    trackBtn.Y + (trackBtn.Height - trackSz.Y) / 2f),
+                Color.White);
+
+            if (trackHov) _hoverText = isTracking ? T("npc.hint.noSelection") : T("main.enable.tip");
+        }
+
+        // ── Click handling ──────────────────────────────────────────────────────────
 
         private void ClickNpc(int x, int y, bool playSound)
         {
@@ -313,17 +441,25 @@ namespace NpcTrackerMod.UI
             }
             _searchFocused = false;
 
-            // Чипы-фильтры по моду (тот же список прямоугольников, что и при отрисовке).
+            // Filter chips
             foreach (var (_, mod, rect) in _modChips)
             {
                 if (!rect.Contains(x, y)) continue;
 
-                ToggleModFilter(mod);
+                if (mod == "__available__")
+                {
+                    _availableOnly = !_availableOnly;
+                    RebuildNpcFilter();
+                }
+                else
+                {
+                    ToggleModFilter(mod);
+                }
                 if (playSound) Game1.playSound("smallSelect");
                 return;
             }
 
-            // Кнопка «Сбросить выбор»
+            // Reset button
             if (NpcResetBtnRect().Contains(x, y))
             {
                 ResetNpcSelection();
@@ -331,7 +467,7 @@ namespace NpcTrackerMod.UI
                 return;
             }
 
-            // Строки NPC-списка
+            // NPC rows
             int listW = BOX_W - PAD * 2;
             for (int i = _npcScrollOffset; i < Math.Min(_npcScrollOffset + NPC_VISIBLE, _filteredNpcs.Count); i++)
             {
@@ -344,27 +480,28 @@ namespace NpcTrackerMod.UI
             }
         }
 
-        // ── Общие операции (мышь и геймпад используют один путь) ───────────────────────
+        // ── Operations ──────────────────────────────────────────────────────────────
 
         private void FocusNpcSearch() => _searchFocused = true;
 
         private void ToggleModFilter(string mod)
         {
             _npcModFilter = _npcModFilter == mod ? null : mod;
+            _availableOnly = false;
             RebuildNpcFilter();
         }
 
         private void ResetNpcSelection()
         {
             _registry.SelectedNpcNames.Clear();
-            _registry.CurrentNpcName   = null;
-            _state.SwitchTargetNPC     = false;
-            _state.SelectedVariantKey  = null;
-            _state.SwitchBuildVariant  = false;
+            _registry.CurrentNpcName = null;
+            _state.SwitchTargetNPC = false;
+            _state.SelectedVariantKey = null;
+            _state.SwitchBuildVariant = false;
             _tiles.Clear();
             _registry.CurrentNpcList.Clear();
             _state.SwitchGetNpcPath = true;
-            _state.SwitchListFull   = false;
+            _state.SwitchListFull = false;
         }
 
         private void ToggleNpcRow(int index)
@@ -377,7 +514,7 @@ namespace NpcTrackerMod.UI
                 _registry.SelectedNpcNames.Remove(name);
                 if (_registry.SelectedNpcNames.Count == 0)
                 {
-                    _state.SwitchTargetNPC   = false;
+                    _state.SwitchTargetNPC = false;
                     _registry.CurrentNpcName = null;
                 }
             }
@@ -389,18 +526,16 @@ namespace NpcTrackerMod.UI
                 _state.NpcSelected = index;
             }
 
-            // При смене NPC сбрасываем выбранный вариант расписания,
-            // так как варианты у разных NPC не совпадают.
             _state.SelectedVariantKey = null;
             _state.SwitchBuildVariant = false;
 
             _tiles.Clear();
             _registry.CurrentNpcList.Clear();
             _state.SwitchGetNpcPath = true;
-            _state.SwitchListFull   = false;
+            _state.SwitchListFull = false;
         }
 
-        // ── Утилиты ───────────────────────────────────────────────────────────────────
+        // ── Utilities ───────────────────────────────────────────────────────────────
 
         private IEnumerable<string> ModGroups() =>
             _registry.NpcModSource.Values.Distinct().OrderBy(s => s);
