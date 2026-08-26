@@ -13,17 +13,17 @@ using StardewValley.Menus;
 namespace NpcTrackerMod.UI
 {
     /// <summary>
-    /// Main menu of the NPC Tracker mod. Four sidebar tabs: Main, NPCs, Settings, Status.
-    /// Split into partial files per tab + shared drawing helpers:
-    ///   TrackingMenu.DrawHelpers.cs  - DrawArrow, DrawDivider, DrawStatCard, ...
-    ///   TrackingMenu.MainTab.cs     - "Main" tab
-    ///   TrackingMenu.NpcTab.cs      - "NPC" tab
-    ///   TrackingMenu.SettingsTab.cs - "Settings" tab
-    ///   TrackingMenu.StatusTab.cs   - "Status" tab (renamed from Info)
+    /// Главное меню мода. Четыре боковых вкладки: Главное, NPC, Настройки, Инфо.
+    /// Разбит на partial-файлы по одному на вкладку + общие хелперы отрисовки:
+    ///   TrackingMenu.DrawHelpers.cs — DrawArrow, DrawDivider, DrawCentered, …
+    ///   TrackingMenu.MainTab.cs    — вкладка «Главное»
+    ///   TrackingMenu.NpcTab.cs     — вкладка «NPC»
+    ///   TrackingMenu.SettingsTab.cs — вкладка «Настройки»
+    ///   TrackingMenu.InfoTab.cs    — вкладка «Инфо»
     /// </summary>
     public partial class TrackingMenu : IClickableMenu
     {
-        // ── Layout constants ──────────────────────────────────────────────────────────
+        // ── Размеры ──────────────────────────────────────────────────────────────────
         private const int BOX_W     = 580;
         private const int BOX_H     = 660;
         private const int TAB_W     = 58;
@@ -33,7 +33,7 @@ namespace NpcTrackerMod.UI
         private const int NPC_ROW_H = 38;
         private const int NPC_VISIBLE = 11;
 
-        // ── Dependencies ──────────────────────────────────────────────────────────────
+        // ── Зависимости ──────────────────────────────────────────────────────────────
         private readonly IMonitor            _monitor;
         private readonly ModState            _state;
         private readonly NpcRegistry         _registry;
@@ -42,14 +42,14 @@ namespace NpcTrackerMod.UI
         private readonly Action              _saveConfig;
         private readonly ITranslationHelper  _i18n;
 
-        // ── Tab state ─────────────────────────────────────────────────────────────────
+        // ── Состояние вкладок ─────────────────────────────────────────────────────────
         private string[] _tabLabels;
         private int      _activeTab;
 
-        // Main tab toggles (replacing checkboxes with SDVToggle)
-        private readonly List<SDVToggle> _mainToggles = new List<SDVToggle>();
+        // Главное
+        private readonly List<ClickableCheckbox> _mainChecks = new List<ClickableCheckbox>();
 
-        // NPC tab
+        // NPC
         private string       _npcSearch      = string.Empty;
         private string       _npcModFilter;
         private bool         _searchFocused;
@@ -57,7 +57,7 @@ namespace NpcTrackerMod.UI
         private List<string> _filteredNpcs   = new List<string>();
         private bool         _availableOnly;  // Filter: only NPCs in current location
 
-        // Settings tab
+        // Настройки — клавиши и слайдеры
         private string _rebindTarget;
         private int    _timeFilterIndex;
         private bool   _draggingSlider;
@@ -65,31 +65,34 @@ namespace NpcTrackerMod.UI
         private int    _positionColorIndex;
         private bool   _draggingAlpha;
 
-        // Menu scroll (when taller than viewport)
+        // Прокрутка окна, когда оно выше вьюпорта
         private int  _menuScroll;
         private bool _draggingMenuScroll;
 
-        // NPC source grouping cache (Status tab)
+        // Кеш группировки NPC по источникам (вкладка «Инфо»).
+        // Пересчитывается только при изменении состава источников, а не каждый кадр.
         private List<(string Source, int Count)> _sourceGroupCache;
         private int _sourceGroupCacheCount = -1;
 
-        // Close button
+        // Кнопка закрытия
         private ClickableTextureComponent _closeBtn;
 
-        // Hover tooltip for current frame (set in draw, rendered at end)
+        // Hover-тултип текущего кадра — устанавливается в draw вкладок,
+        // рисуется в конце draw (только при наведении, без постоянного текста).
         private string _hoverText;
 
-        // Gamepad: interactive regions for current tab + focus index
+        // Геймпад: интерактивные регионы текущей вкладки + индекс фокуса.
+        // Список пересобирается при перестроении вкладки (RebuildTab).
         private readonly List<(Rectangle Rect, Action Action)> _interactive
             = new List<(Rectangle, Action)>();
         private int  _snapIndex;
         private bool _gamepadActive;
 
-        // Short references to window position
+        // Короткие ссылки на позиции окна
         private int BX => xPositionOnScreen;
         private int BY => yPositionOnScreen;
 
-        // ── Constructor ───────────────────────────────────────────────────────────────
+        // ── Конструктор ───────────────────────────────────────────────────────────────
 
         public TrackingMenu(
             IMonitor            monitor,
@@ -114,10 +117,10 @@ namespace NpcTrackerMod.UI
                 T("tab.main"),
                 T("tab.npc"),
                 T("tab.settings"),
-                T("tab.status")
+                T("tab.info")
             };
 
-            // Restore UI state from config
+            // Восстанавливаем UI-индексы из текущего конфига
             int idx = Array.IndexOf(TimeSteps, _state.TimeFilter);
             _timeFilterIndex = idx >= 0 ? idx : 0;
 
@@ -132,14 +135,18 @@ namespace NpcTrackerMod.UI
             RebuildTab();
         }
 
-        // ── Localization ───────────────────────────────────────────────────────────────
+        // ── Локализация ───────────────────────────────────────────────────────────────
 
+        /// <summary> Возвращает перевод по ключу (без токенов). </summary>
         private string T(string key) => LocalizationHelper.Get(_i18n, key);
+
+        /// <summary> Возвращает перевод по ключу с токенами (например, {{count}}). </summary>
         private string T(string key, object tokens) => LocalizationHelper.Get(_i18n, key, tokens);
 
+        /// <summary> True пока поле поиска NPC в фокусе. </summary>
         public bool IsSearchFocused => _searchFocused;
 
-        // ── Initialization ──────────────────────────────────────────────────────────────
+        // ── Инициализация ──────────────────────────────────────────────────────────────
 
         private void OnWindowTextInput(object sender, TextInputEventArgs e)
         {
@@ -160,10 +167,14 @@ namespace NpcTrackerMod.UI
 
         private void InitPosition()
         {
+            // Центрируем по горизонтали.
             xPositionOnScreen = Math.Max(8,
-                Math.Min(Game1.viewport.Width / 2 - BOX_W / 2,
-                         Math.Max(8, Game1.viewport.Width - BOX_W - 8)));
+                Math.Min(Game1.viewport.Width  / 2 - BOX_W / 2,
+                         Math.Max(8, Game1.viewport.Width  - BOX_W - 8)));
 
+            // По вертикали: если окно помещается целиком — центрируем;
+            // если оно выше вьюпорта — верх прижат к 8, а содержимое
+            // прокручивается полоской справа (_menuScroll).
             int visibleH = Game1.viewport.Height - 16;
             if (BOX_H <= visibleH)
             {
@@ -183,10 +194,12 @@ namespace NpcTrackerMod.UI
                 Game1.mouseCursors, new Rectangle(337, 494, 12, 12), 4f);
         }
 
-        // ── Menu scrollbar ─────────────────────────────────────────────────────────────
+        // ── Прокрутка окна (когда оно выше вьюпорта) ─────────────────────────────────
 
+        /// <summary> Насколько окно выше вьюпорта (0 — помещается целиком). </summary>
         private int MaxMenuScroll => Math.Max(0, BOX_H - (Game1.viewport.Height - 16));
 
+        /// <summary> Полоска прокрутки справа от окна, фиксирована на экране. </summary>
         private Rectangle MenuScrollTrackRect()
         {
             int x = Math.Min(BX + BOX_W + 6, Game1.viewport.Width - 14);
@@ -202,7 +215,7 @@ namespace NpcTrackerMod.UI
         private int MenuScrollThumbY()
         {
             var track = MenuScrollTrackRect();
-            int max = MaxMenuScroll;
+            int max   = MaxMenuScroll;
             if (max <= 0) return track.Y;
             return track.Y + (track.Height - MenuScrollThumbH()) * _menuScroll / max;
         }
@@ -221,9 +234,9 @@ namespace NpcTrackerMod.UI
             int max = MaxMenuScroll;
             if (max <= 0) return;
 
-            var track = MenuScrollTrackRect();
-            int thumbH = MenuScrollThumbH();
-            int range = Math.Max(1, track.Height - thumbH);
+            var  track  = MenuScrollTrackRect();
+            int  thumbH = MenuScrollThumbH();
+            int  range  = Math.Max(1, track.Height - thumbH);
             float t = MathHelper.Clamp(
                 (float)(y - track.Y - thumbH / 2f) / range, 0f, 1f);
 
@@ -231,34 +244,40 @@ namespace NpcTrackerMod.UI
             yPositionOnScreen = 8 - _menuScroll;
         }
 
-        // ── Tab management ────────────────────────────────────────────────────────────
-
         private void RebuildTab()
         {
-            _mainToggles.Clear();
+            _mainChecks.Clear();
             _npcScrollOffset = 0;
 
-            if (_activeTab == 0) BuildMainToggles();
+            if (_activeTab == 0) BuildMainChecks();
             if (_activeTab == 1) RebuildNpcFilter();
 
             RebuildInteractive();
         }
 
+        /// <summary>
+        /// Переключает вкладку (мышь, клавиатура и геймпад используют один путь).
+        /// </summary>
         private void SwitchTab(int tab)
         {
             int next = (tab + _tabLabels.Length) % _tabLabels.Length;
             if (_activeTab == next) return;
 
-            _activeTab = next;
+            _activeTab     = next;
             _searchFocused = false;
-            _rebindTarget = null;
-            _pickingColor = null;
+            _rebindTarget  = null;
+            _pickingColor  = null;
             RebuildTab();
             Game1.playSound("shwip");
         }
 
-        // ── Gamepad: interactive regions ───────────────────────────────────────────
+        // ── Геймпад: интерактивные регионы ───────────────────────────────────────
 
+        /// <summary>
+        /// Пересобирает список интерактивных регионов текущей вкладки.
+        /// Прямоугольники совпадают с теми, что используют обработчики кликов, —
+        /// фокус-рамка и клики геймпадом бьют ровно в те же элементы.
+        /// </summary>
         private void RebuildInteractive()
         {
             _interactive.Clear();
@@ -267,25 +286,25 @@ namespace NpcTrackerMod.UI
             switch (_activeTab)
             {
                 case 0:
-                    for (int i = 0; i < _mainToggles.Count; i++)
+                    for (int i = 0; i < _mainChecks.Count; i++)
                     {
                         int idx = i;
-                        _interactive.Add((_mainToggles[i].Bounds, () => ToggleMainSwitch(idx)));
+                        _interactive.Add((_mainChecks[i].Bounds, () => ToggleMainCheck(idx)));
                     }
 
-                    if (StepNavVisible() && _mainToggles.Count >= 5)
+                    if (StepNavVisible() && _mainChecks.Count >= 5)
                     {
-                        int navY = _mainToggles[4].Bounds.Bottom + 14;
+                        int navY = _mainChecks[4].Bounds.Bottom + 14;
                         _interactive.Add((StepPrevBtn(navY), () => ChangeStep(-1)));
                         _interactive.Add((StepNextBtn(navY), () => ChangeStep(+1)));
                         _interactive.Add((TimelineRect(navY), () => ChangeStepToNext()));
                     }
 
-                    if (VariantsVisible() && _mainToggles.Count >= 5)
+                    if (VariantsVisible() && _mainChecks.Count >= 5)
                     {
                         int chipStartX = BX + PAD + 6;
                         int chipStartY = VariantsBlockY() + 34;
-                        int chipMaxW = BOX_W - PAD * 2 - 12;
+                        int chipMaxW   = BOX_W - PAD * 2 - 12;
 
                         foreach (var (key, rect) in ComputeVariantChipRects(chipStartX, chipStartY, chipMaxW))
                         {
@@ -319,24 +338,18 @@ namespace NpcTrackerMod.UI
                     break;
 
                 case 2:
-                    _interactive.Add((MenuKeyBtnRect(), () => StartRebind("menu")));
-                    _interactive.Add((DebugKeyBtnRect(), () => StartRebind("debug")));
+                    _interactive.Add((MenuKeyBtnRect(),      () => StartRebind("menu")));
+                    _interactive.Add((DebugKeyBtnRect(),     () => StartRebind("debug")));
                     _interactive.Add((SelectNpcKeyBtnRect(), () => StartRebind("select")));
                     _interactive.Add((TimePrevBtn(), () => ChangeTimeFilter(-1)));
                     _interactive.Add((TimeNextBtn(), () => ChangeTimeFilter(+1)));
                     _interactive.Add((TimeTrackHitRect(), () => ApplyTimeSliderX(SliderThumbX())));
                     _interactive.Add((ColorPrevBtn(RouteColorRowY), () => CycleRouteColor(-1)));
                     _interactive.Add((ColorNextBtn(RouteColorRowY), () => CycleRouteColor(+1)));
-                    _interactive.Add((ColorPrevBtn(PosColorRowY), () => CyclePosColor(-1)));
-                    _interactive.Add((ColorNextBtn(PosColorRowY), () => CyclePosColor(+1)));
+                    _interactive.Add((ColorPrevBtn(PosColorRowY),   () => CyclePosColor(-1)));
+                    _interactive.Add((ColorNextBtn(PosColorRowY),   () => CyclePosColor(+1)));
                     _interactive.Add((AlphaTrackHitRect(), () => ApplyAlphaSliderX(AlphaThumbX())));
-                    _interactive.Add((SaveSettingsBtnRect(), SaveSettings));
                     _interactive.Add((ResetSettingsBtnRect(), ResetSettings));
-                    break;
-
-                case 3:
-                    // Status tab: open inspector button
-                    _interactive.Add((OpenInspectorBtnRect(), OpenInspectorFromStatus));
                     break;
             }
         }
@@ -396,11 +409,11 @@ namespace NpcTrackerMod.UI
             }
             catch (Exception ex)
             {
-                _monitor.Log($"Gamepad error in menu: {ex.Message}", LogLevel.Error);
+                _monitor.Log($"Ошибка обработки геймпада в меню: {ex.Message}", LogLevel.Error);
             }
         }
 
-        // ── Tab positions ───────────────────────────────────────────────────────────
+        // ── Позиции вкладок ───────────────────────────────────────────────────────────
 
         private Rectangle TabRect(int i)
         {
@@ -408,7 +421,7 @@ namespace NpcTrackerMod.UI
             return new Rectangle(BX - TAB_W, startY + i * (TAB_H + TAB_GAP), TAB_W, TAB_H);
         }
 
-        // ── Draw ─────────────────────────────────────────────────────────────────────
+        // ── Отрисовка ─────────────────────────────────────────────────────────────────
 
         public override void draw(SpriteBatch b)
         {
@@ -416,7 +429,6 @@ namespace NpcTrackerMod.UI
             {
                 _hoverText = null;
 
-                // Background box
                 drawTextureBox(b, Game1.menuTexture, new Rectangle(0, 256, 60, 60),
                     BX, BY, BOX_W, BOX_H, Color.White, 1f, true);
 
@@ -425,20 +437,21 @@ namespace NpcTrackerMod.UI
 
                 switch (_activeTab)
                 {
-                    case 0: DrawMainTab(b); break;
-                    case 1: DrawNpcTab(b); break;
+                    case 0: DrawMainTab(b);     break;
+                    case 1: DrawNpcTab(b);      break;
                     case 2: DrawSettingsTab(b); break;
-                    case 3: DrawStatusTab(b); break;
+                    case 3: DrawInfoTab(b);     break;
                 }
 
                 DrawSnapFocus(b);
 
+                // Полоска прокрутки, если окно выше вьюпорта.
                 if (MaxMenuScroll > 0)
                     DrawMenuScrollbar(b);
 
                 _closeBtn.draw(b);
 
-                // Hover tooltip
+                // Hover-тултип — только когда курсор над элементом с подсказкой.
                 if (!string.IsNullOrEmpty(_hoverText))
                     IClickableMenu.drawHoverText(b, _hoverText, Game1.smallFont);
 
@@ -446,12 +459,13 @@ namespace NpcTrackerMod.UI
             }
             catch (Exception ex)
             {
-                _monitor.Log($"Error drawing menu: {ex.Message}", LogLevel.Error);
+                _monitor.Log($"Ошибка отрисовки меню: {ex.Message}", LogLevel.Error);
                 base.draw(b);
                 drawMouse(b);
             }
         }
 
+        /// <summary> Рисует золотую рамку вокруг элемента, сфокусированного геймпадом. </summary>
         private void DrawSnapFocus(SpriteBatch b)
         {
             if (!_gamepadActive || _interactive.Count == 0) return;
@@ -468,17 +482,17 @@ namespace NpcTrackerMod.UI
         {
             for (int i = 0; i < _tabLabels.Length; i++)
             {
-                var rect = TabRect(i);
+                var  rect   = TabRect(i);
                 bool active = i == _activeTab;
 
                 drawTextureBox(b, Game1.menuTexture, new Rectangle(0, 256, 60, 60),
                     rect.X, rect.Y, rect.Width, rect.Height,
                     active ? Color.White : new Color(190, 180, 165), 1f, false);
 
-                var font = Game1.smallFont;
-                var sz = font.MeasureString(_tabLabels[i]);
-                var origin = new Vector2(sz.X / 2f, sz.Y / 2f);
-                var pos = new Vector2(rect.X + rect.Width / 2f, rect.Y + rect.Height / 2f);
+                var  font   = Game1.smallFont;
+                var  sz     = font.MeasureString(_tabLabels[i]);
+                var  origin = new Vector2(sz.X / 2f, sz.Y / 2f);
+                var  pos    = new Vector2(rect.X + rect.Width / 2f, rect.Y + rect.Height / 2f);
 
                 b.DrawString(font, _tabLabels[i], pos,
                     active ? Game1.textColor : new Color(100, 90, 75),
@@ -486,7 +500,7 @@ namespace NpcTrackerMod.UI
             }
         }
 
-        // ── Input handling ───────────────────────────────────────────────────────────
+        // ── Обработка ввода ───────────────────────────────────────────────────────────
 
         public override void receiveLeftClick(int x, int y, bool playSound = true)
         {
@@ -501,7 +515,7 @@ namespace NpcTrackerMod.UI
                     return;
                 }
 
-                // Menu scrollbar
+                // Полоска прокрутки окна
                 if (MaxMenuScroll > 0 && MenuScrollTrackRect().Contains(x, y))
                 {
                     _draggingMenuScroll = true;
@@ -510,7 +524,6 @@ namespace NpcTrackerMod.UI
                     return;
                 }
 
-                // Tabs
                 for (int i = 0; i < _tabLabels.Length; i++)
                 {
                     if (!TabRect(i).Contains(x, y)) continue;
@@ -520,15 +533,14 @@ namespace NpcTrackerMod.UI
 
                 switch (_activeTab)
                 {
-                    case 0: ClickMain(x, y, playSound); break;
-                    case 1: ClickNpc(x, y, playSound); break;
+                    case 0: ClickMain(x, y, playSound);     break;
+                    case 1: ClickNpc(x, y, playSound);      break;
                     case 2: ClickSettings(x, y, playSound); break;
-                    case 3: ClickStatus(x, y, playSound); break;
                 }
             }
             catch (Exception ex)
             {
-                _monitor.Log($"Click error in menu: {ex.Message}", LogLevel.Error);
+                _monitor.Log($"Ошибка клика в меню: {ex.Message}", LogLevel.Error);
             }
         }
 
@@ -538,7 +550,7 @@ namespace NpcTrackerMod.UI
             if (_activeTab == 2)
             {
                 if (_draggingSlider) ApplyTimeSliderX(x);
-                if (_draggingAlpha) ApplyAlphaSliderX(x);
+                if (_draggingAlpha)  ApplyAlphaSliderX(x);
             }
             base.leftClickHeld(x, y);
         }
@@ -546,16 +558,16 @@ namespace NpcTrackerMod.UI
         public override void releaseLeftClick(int x, int y)
         {
             _draggingMenuScroll = false;
-            _draggingSlider = false;
-            _draggingAlpha = false;
+            _draggingSlider     = false;
+            _draggingAlpha      = false;
             base.releaseLeftClick(x, y);
         }
 
-        public override void receiveKeyPress(Keys key)
+        public override void receiveKeyPress(Microsoft.Xna.Framework.Input.Keys key)
         {
             if (_rebindTarget != null)
             {
-                if (key != Keys.Escape)
+                if (key != Microsoft.Xna.Framework.Input.Keys.Escape)
                 {
                     var btn = (SButton)(int)key;
                     if      (_rebindTarget == "menu")   _config.MenuKey      = btn;
@@ -569,11 +581,12 @@ namespace NpcTrackerMod.UI
 
             if (_searchFocused)
             {
-                if (key == Keys.Escape || key == Keys.Enter)
+                if (key == Microsoft.Xna.Framework.Input.Keys.Escape ||
+                    key == Microsoft.Xna.Framework.Input.Keys.Enter)
                 {
                     _searchFocused = false;
                 }
-                else if (key == Keys.Back && _npcSearch.Length > 0)
+                else if (key == Microsoft.Xna.Framework.Input.Keys.Back && _npcSearch.Length > 0)
                 {
                     _npcSearch = _npcSearch.Substring(0, _npcSearch.Length - 1);
                     RebuildNpcFilter();
@@ -581,9 +594,11 @@ namespace NpcTrackerMod.UI
                 return;
             }
 
-            if (key == Keys.Left || key == Keys.Right)
+            // Стрелки ◄ ► переключают вкладки — удобно без мыши.
+            if (key == Microsoft.Xna.Framework.Input.Keys.Left ||
+                key == Microsoft.Xna.Framework.Input.Keys.Right)
             {
-                int dir = key == Keys.Right ? 1 : -1;
+                int dir = key == Microsoft.Xna.Framework.Input.Keys.Right ? 1 : -1;
                 SwitchTab(_activeTab + dir);
                 return;
             }
@@ -593,6 +608,7 @@ namespace NpcTrackerMod.UI
 
         public override void receiveScrollWheelAction(int direction)
         {
+            // Главная: скролл листает шаги пошагового режима
             if (_activeTab == 0
                 && _state.RouteStepMode
                 && _state.SwitchTargetNPC
@@ -613,6 +629,8 @@ namespace NpcTrackerMod.UI
                 return;
             }
 
+            // Настройки: колёсико больше не меняет фильтр времени.
+            // Если окно выше вьюпорта — колесо прокручивает меню.
             if (MaxMenuScroll > 0)
             {
                 _menuScroll = MathHelper.Clamp(
@@ -626,114 +644,6 @@ namespace NpcTrackerMod.UI
             base.gameWindowSizeChanged(oldBounds, newBounds);
             InitPosition();
             RebuildTab();
-        }
-
-        // ── New UI component methods ──────────────────────────────────────────────
-
-        /// <summary>
-        /// Build toggle switches for the Main tab (replacing checkboxes).
-        /// </summary>
-        private void BuildMainToggles()
-        {
-            int x = BX + PAD + 6;
-            int y = BY + 90;
-
-            // Display section
-            _mainToggles.Add(new SDVToggle(
-                new Rectangle(x, y, BOX_W - PAD * 2 - 6, 36),
-                T("main.enable"),
-                _state.EnableDisplay,
-                v => _state.EnableDisplay = v,
-                T("main.enable.tip")));
-            y += 44;
-
-            _mainToggles.Add(new SDVToggle(
-                new Rectangle(x, y, BOX_W - PAD * 2 - 6, 36),
-                T("main.grid"),
-                _state.DisplayGrid,
-                v => _state.DisplayGrid = v,
-                T("main.grid.tip")));
-            y += 44;
-
-            // Routes section
-            y += 16; // Gap between sections
-
-            _mainToggles.Add(new SDVToggle(
-                new Rectangle(x, y, BOX_W - PAD * 2 - 6, 36),
-                T("main.allLocations"),
-                _state.SwitchTargetLocations,
-                v =>
-                {
-                    _state.SwitchTargetLocations = v;
-                    _tiles.Clear();
-                    _state.SwitchGetNpcPath = true;
-                    _registry.CurrentNpcList.Clear();
-                    _state.SwitchListFull = false;
-                },
-                T("main.allLocations.tip")));
-            y += 44;
-
-            _mainToggles.Add(new SDVToggle(
-                new Rectangle(x, y, BOX_W - PAD * 2 - 6, 36),
-                T("main.globalRoute"),
-                _state.SwitchGlobalNpcPath,
-                v =>
-                {
-                    _state.SwitchGlobalNpcPath = v;
-                    _tiles.Clear();
-                    _state.SwitchGetNpcPath = true;
-                },
-                T("main.globalRoute.tip")));
-            y += 44;
-
-            _mainToggles.Add(new SDVToggle(
-                new Rectangle(x, y, BOX_W - PAD * 2 - 6, 36),
-                T("main.stepMode"),
-                _state.RouteStepMode,
-                v =>
-                {
-                    _state.RouteStepMode = v;
-                    _state.RouteStepIndex = 0;
-                    _state.RouteStepScheduleKey = null;
-                    _state.SelectedVariantKey = null;
-                    _state.SwitchBuildVariant = false;
-                    _tiles.Clear();
-                    _state.SwitchGetNpcPath = true;
-                },
-                T("main.stepMode.tip")));
-        }
-
-        /// <summary>
-        /// Toggle a switch on the Main tab by index.
-        /// </summary>
-        private void ToggleMainSwitch(int index)
-        {
-            if (index < 0 || index >= _mainToggles.Count) return;
-            _mainToggles[index].Toggle();
-        }
-
-        // ── Status tab helpers ──────────────────────────────────────────────────────
-
-        private Rectangle OpenInspectorBtnRect() =>
-            new Rectangle(BX + PAD, BY + BOX_H - 70, BOX_W - PAD * 2, 36);
-
-        private void OpenInspectorFromStatus()
-        {
-            // Open inspector for the tile the player is standing on
-            if (Context.IsWorldReady && Game1.currentLocation != null)
-            {
-                var player = Game1.player;
-                if (player != null)
-                {
-                    var tile = new Point((int)player.Position.X / 64, (int)player.Position.Y / 64);
-                    // Delegate to ModEntry to open inspector
-                    Game1.activeClickableMenu = new TileInspectMenu(
-                        _monitor, _state, _registry, tile,
-                        new List<(string, string)>(),  // Empty owners - just show tile info
-                        _registry.GameNpcs ?? new List<NPC>(),
-                        _i18n);
-                }
-            }
         }
     }
 }

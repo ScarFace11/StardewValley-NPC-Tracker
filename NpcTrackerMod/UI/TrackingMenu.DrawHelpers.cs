@@ -7,7 +7,7 @@ using StardewValley.Menus;
 namespace NpcTrackerMod.UI
 {
     /// <summary>
-    /// Common drawing primitives for TrackingMenu tabs.
+    /// Общие примитивы отрисовки, используемые всеми вкладками TrackingMenu.
     /// </summary>
     public partial class TrackingMenu
     {
@@ -26,13 +26,7 @@ namespace NpcTrackerMod.UI
         private static readonly Color CardSelected = new Color(255, 233, 140); // Selected card
         private static readonly Color HoverBg      = new Color(200, 195, 180, 80); // Hover effect
 
-        // Status indicator colors
-        private static readonly Color StatusGreen  = new Color(80, 180, 60);   // Available
-        private static readonly Color StatusOrange = new Color(220, 150, 30);  // Leaving soon
-        private static readonly Color StatusRed    = new Color(200, 70, 50);   // Unavailable
-        private static readonly Color StatusGray   = new Color(140, 130, 115); // Offline
-
-        /// <summary> Draw an arrow (left or right) from game cursor sprites. </summary>
+        /// <summary> Рисует стрелку ◄ или ► из игровых курсоров. </summary>
         private static void DrawArrow(SpriteBatch b, Rectangle rect, bool left)
         {
             var src = left
@@ -41,15 +35,16 @@ namespace NpcTrackerMod.UI
             b.Draw(Game1.mouseCursors, rect, src, Color.White);
         }
 
-        /// <summary> Draw a horizontal divider line. </summary>
+        /// <summary> Рисует горизонтальный разделитель. </summary>
         private void DrawDivider(SpriteBatch b, int y)
         {
             int x1 = BX + PAD;
             int x2 = BX + BOX_W - PAD;
-            b.Draw(Game1.staminaRect, new Rectangle(x1, y, x2 - x1, 1), DividerColor);
+            b.Draw(Game1.staminaRect, new Rectangle(x1, y, x2 - x1, 2),
+                new Color(180, 155, 110, 150));
         }
 
-        /// <summary> Draw centered text using dialogue font. </summary>
+        /// <summary> Рисует текст, выровненный по центру ширины окна. </summary>
         private void DrawCentered(SpriteBatch b, string text, SpriteFont font, int y, Color color)
         {
             var sz = font.MeasureString(text);
@@ -57,25 +52,19 @@ namespace NpcTrackerMod.UI
                 new Vector2(BX + (BOX_W - sz.X) / 2f, y), color);
         }
 
-        /// <summary> Draw section header with golden accent line. </summary>
-        private void DrawSectionHeader(SpriteBatch b, string text, int x, int y)
-        {
-            // Golden accent bar
-            b.Draw(Game1.staminaRect, new Rectangle(x, y + 4, 3, 18), GoldAccent);
-            // Section title
+        /// <summary> Рисует заголовок секции крупным шрифтом. </summary>
+        private void DrawSectionHeader(SpriteBatch b, string text, int x, int y) =>
             Utility.drawTextWithShadow(b, text, Game1.dialogueFont,
-                new Vector2(x + 10, y), TextPrimary);
-        }
+                new Vector2(x, y), new Color(90, 70, 50));
 
-        /// <summary> Draw a group header (smaller text). </summary>
-        private void DrawGroupHeader(SpriteBatch b, string text, int x, int y)
-        {
+        /// <summary> Рисует заголовок группы мелким шрифтом. </summary>
+        private void DrawGroupHeader(SpriteBatch b, string text, int x, int y) =>
             Utility.drawTextWithShadow(b, text, Game1.smallFont,
-                new Vector2(x, y), TextSecondary);
-        }
+                new Vector2(x, y), new Color(110, 90, 65));
 
         /// <summary>
-        /// Truncate a string with ellipsis to fit within maxWidth pixels.
+        /// Обрезает строку с многоточием, чтобы она помещалась в maxWidth пикселей
+        /// шрифта font. Используется, чтобы текст не выходил за рамки меню.
         /// </summary>
         private static string TruncateToWidth(SpriteFont font, string text, float maxWidth)
         {
@@ -84,27 +73,28 @@ namespace NpcTrackerMod.UI
 
             for (int len = text.Length - 1; len > 1; len--)
             {
-                if (font.MeasureString(text.Substring(0, len) + "...").X <= maxWidth)
-                    return text.Substring(0, len) + "...";
+                if (font.MeasureString(text.Substring(0, len) + "…").X <= maxWidth)
+                    return text.Substring(0, len) + "…";
             }
-            return "...";
+            return "…";
         }
 
-        /// <summary> Draw a key-value pair, advancing y by 26px. </summary>
+        /// <summary> Рисует пару «Ключ: Значение» и сдвигает y вниз на 26px. </summary>
         private void DrawKV(SpriteBatch b, string key, string value, int x, ref int y)
         {
             Utility.drawTextWithShadow(b, key + ":", Game1.smallFont,
-                new Vector2(x, y), TextSecondary);
+                new Vector2(x, y), new Color(100, 90, 75));
             float offset = Game1.smallFont.MeasureString(key + ":  ").X;
 
+            // Значение обрезается, чтобы не выходить за правую границу меню.
             float maxW = (BX + BOX_W - PAD) - (x + offset);
             string shown = TruncateToWidth(Game1.smallFont, value, maxW);
             Utility.drawTextWithShadow(b, shown, Game1.smallFont,
-                new Vector2(x + offset, y), TextDim);
+                new Vector2(x + offset, y), new Color(60, 50, 40));
             y += 26;
         }
 
-        /// <summary> Capitalize first letter. </summary>
+        /// <summary> Первый символ заглавным. </summary>
         private static string Capitalize(string s) =>
             string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s.Substring(1);
 
@@ -115,10 +105,10 @@ namespace NpcTrackerMod.UI
         {
             Color color = status switch
             {
-                NpcStatus.Available   => StatusGreen,
-                NpcStatus.Leaving     => StatusOrange,
-                NpcStatus.Unavailable => StatusRed,
-                _                     => StatusGray
+                NpcStatus.Available   => new Color(80, 180, 60),
+                NpcStatus.Leaving     => new Color(220, 150, 30),
+                NpcStatus.Unavailable => new Color(200, 70, 50),
+                _                     => new Color(140, 130, 115)
             };
 
             // Outer ring (dark)
@@ -132,85 +122,13 @@ namespace NpcTrackerMod.UI
         }
 
         /// <summary>
-        /// Draw a status card with large value and label.
+        /// Draw a magnifying glass icon for search.
         /// </summary>
-        private void DrawStatCard(SpriteBatch b, int x, int y, int width, int height,
-            string value, string label, Color accentColor)
+        private static void DrawSearchIcon(SpriteBatch b, int x, int y, int size)
         {
-            // Card background
-            drawTextureBox(b, Game1.menuTexture, new Rectangle(0, 256, 60, 60),
-                x, y, width, height, CardBg, 1f, false);
-
-            // Accent top border
-            b.Draw(Game1.staminaRect,
-                new Rectangle(x, y, width, 3), accentColor);
-
-            // Large value
-            var valSz = Game1.dialogueFont.MeasureString(value);
-            Utility.drawTextWithShadow(b, value, Game1.dialogueFont,
-                new Vector2(x + (width - valSz.X) / 2f, y + 12),
-                TextPrimary);
-
-            // Label below
-            var lblSz = Game1.smallFont.MeasureString(label);
-            Utility.drawTextWithShadow(b, label, Game1.smallFont,
-                new Vector2(x + (width - lblSz.X) / 2f, y + 12 + valSz.Y + 4),
-                TextSecondary);
-        }
-
-        /// <summary>
-        /// Draw a progress bar with label and value.
-        /// </summary>
-        private void DrawProgressBar(SpriteBatch b, int x, int y, int width,
-            string label, int value, int total, Color barColor)
-        {
-            // Label
-            Utility.drawTextWithShadow(b, label, Game1.smallFont,
-                new Vector2(x, y), TextSecondary);
-
-            int barY = y + 22;
-            int barH = 10;
-            int barWidth = width - 60;
-
-            // Track
-            b.Draw(Game1.staminaRect,
-                new Rectangle(x, barY, barWidth, barH),
-                new Color(80, 70, 55));
-
-            // Fill
-            float ratio = total > 0 ? (float)value / total : 0f;
-            if (ratio > 0f)
-            {
-                b.Draw(Game1.staminaRect,
-                    new Rectangle(x, barY, (int)(barWidth * ratio), barH),
-                    barColor);
-            }
-
-            // Value text
-            string valText = value.ToString();
-            var valSz = Game1.smallFont.MeasureString(valText);
-            Utility.drawTextWithShadow(b, valText, Game1.smallFont,
-                new Vector2(x + barWidth + 8, barY - 2),
-                TextPrimary);
-        }
-
-        /// <summary>
-        /// Draw a tooltip at the current mouse position using hover text.
-        /// </summary>
-        private void ShowTooltip(string text)
-        {
-            if (_hoverText == null && !string.IsNullOrEmpty(text))
-                _hoverText = text;
-        }
-
-        /// <summary>
-        /// If the mouse is over rect, set the hover text (only if not already set).
-        /// </summary>
-        private void TipIfHover(SpriteBatch b, Rectangle rect, string key)
-        {
-            if (_hoverText != null) return;
-            if (rect.Contains(Game1.getMouseX(), Game1.getMouseY()))
-                _hoverText = T(key);
+            // Simple magnifying glass using cursor sprites
+            var src = new Rectangle(80, 48, 16, 16); // magnifying glass from sprites
+            b.Draw(Game1.mouseCursors, new Rectangle(x, y, size, size), src, Color.White);
         }
 
         /// <summary>
@@ -243,31 +161,6 @@ namespace NpcTrackerMod.UI
         }
 
         /// <summary>
-        /// Get weather display text for the current game state.
-        /// </summary>
-        private string GetWeatherText()
-        {
-            if (!Context.IsWorldReady) return "-";
-
-            try
-            {
-                // Access weather through Game1 (compatible with SMAPI)
-                string weather = "Sunny";
-                
-                if (Game1.isRaining)
-                    weather = Game1.isLightning ? "Stormy" : "Rainy";
-                else if (Game1.isSnowing)
-                    weather = "Snowy";
-                
-                return weather;
-            }
-            catch
-            {
-                return "-";
-            }
-        }
-
-        /// <summary>
         /// Format game time (integer like 1200) to readable format "12:00 PM".
         /// </summary>
         private static string FormatGameTime(int time)
@@ -289,14 +182,28 @@ namespace NpcTrackerMod.UI
         }
 
         /// <summary>
-        /// Draw a magnifying glass icon for search.
+        /// Get weather display text for the current game state.
         /// </summary>
-        private static void DrawSearchIcon(SpriteBatch b, int x, int y, int size)
+        private string GetWeatherText()
         {
-            // Simple magnifying glass using cursor sprites
-            // Use the game's cursor for a search-like icon
-            var src = new Rectangle(80, 48, 16, 16); // magnifying glass from sprites
-            b.Draw(Game1.mouseCursors, new Rectangle(x, y, size, size), src, Color.White);
+            if (!StardewModdingAPI.Context.IsWorldReady) return "-";
+
+            try
+            {
+                // Access weather through Game1 (compatible with SMAPI)
+                string weather = "Sunny";
+                
+                if (Game1.isRaining)
+                    weather = Game1.isLightning ? "Stormy" : "Rainy";
+                else if (Game1.isSnowing)
+                    weather = "Snowy";
+                
+                return weather;
+            }
+            catch
+            {
+                return "-";
+            }
         }
     }
 }

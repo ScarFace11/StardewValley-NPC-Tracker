@@ -6,32 +6,20 @@ using StardewValley.Menus;
 
 namespace NpcTrackerMod.UI
 {
-    /// <summary>
-    /// SDV-style toggle switch with track and handle.
-    /// ON: golden track with bright handle.
-    /// OFF: dark track with gray handle.
-    /// Draws label to the right of the toggle.
-    /// </summary>
-    internal class SDVToggle
+    /// <summary> Переключатель с галочкой и текстовой подписью. </summary>
+    internal class ClickableCheckbox
     {
         public Rectangle  Bounds    { get; }
         public string     Label     { get; }
-        public string     Tooltip   { get; set; }
-        public bool       IsOn      { get; private set; }
+        public bool       IsChecked { get; private set; }
 
         private readonly Action<bool> _onToggle;
 
-        // Toggle dimensions
-        private const int TOGGLE_W = 36;
-        private const int TOGGLE_H = 18;
-        private const int HANDLE_SIZE = 14;
-
-        public SDVToggle(Rectangle bounds, string label, bool initial, Action<bool> onToggle, string tooltip = null)
+        public ClickableCheckbox(Rectangle bounds, string label, bool initial, Action<bool> onToggle)
         {
-            Bounds = bounds;
-            Label = label;
-            Tooltip = tooltip;
-            IsOn = initial;
+            Bounds    = bounds;
+            Label     = label;
+            IsChecked = initial;
             _onToggle = onToggle;
         }
 
@@ -39,89 +27,30 @@ namespace NpcTrackerMod.UI
 
         public void Toggle()
         {
-            IsOn = !IsOn;
-            _onToggle?.Invoke(IsOn);
+            IsChecked = !IsChecked;
+            _onToggle?.Invoke(IsChecked);
         }
 
         public void Draw(SpriteBatch b)
         {
             try
             {
-                // Toggle track position: centered vertically, left side of bounds
-                int toggleX = Bounds.X;
-                int toggleY = Bounds.Y + (Bounds.Height - TOGGLE_H) / 2;
+                var srcRect = IsChecked
+                    ? new Rectangle(291, 253, 9, 9)
+                    : new Rectangle(273, 253, 9, 9);
 
-                // Track background
-                Color trackColor = IsOn
-                    ? new Color(180, 145, 50)   // SDV gold
-                    : new Color(90, 80, 65);     // dark brown
+                b.Draw(Game1.mouseCursors_1_6,
+                    new Vector2(Bounds.X, Bounds.Y),
+                    srcRect, Color.White, 0f, Vector2.Zero, 5f, SpriteEffects.None, 0.4f);
 
-                // Draw track as rounded rectangle
-                IClickableMenu.drawTextureBox(b, Game1.menuTexture, new Rectangle(0, 256, 60, 60),
-                    toggleX, toggleY, TOGGLE_W, TOGGLE_H,
-                    trackColor, 1f, false);
+                var textPos = new Vector2(
+                    Bounds.X + 70,
+                    Bounds.Y + Bounds.Height / 2f - Game1.dialogueFont.MeasureString(Label).Y / 2f);
 
-                // Handle position: slides left/right
-                int handleX = IsOn
-                    ? toggleX + TOGGLE_W - HANDLE_SIZE - 2
-                    : toggleX + 2;
-                int handleY = toggleY + (TOGGLE_H - HANDLE_SIZE) / 2;
-
-                // Handle glow when ON
-                if (IsOn)
-                {
-                    var glow = new Rectangle(handleX - 1, handleY - 1, HANDLE_SIZE + 2, HANDLE_SIZE + 2);
-                    b.Draw(Game1.staminaRect, glow, new Color(255, 215, 80, 120));
-                }
-
-                // Handle
-                Color handleColor = IsOn
-                    ? new Color(255, 240, 180)
-                    : new Color(170, 160, 140);
-                b.Draw(Game1.staminaRect,
-                    new Rectangle(handleX, handleY, HANDLE_SIZE, HANDLE_SIZE),
-                    handleColor);
-
-                // Label to the right of toggle
-                float labelX = toggleX + TOGGLE_W + 10;
-                float labelY = Bounds.Y + (Bounds.Height - Game1.dialogueFont.MeasureString(Label).Y) / 2f;
-
-                // Dimmed text when disabled (tracker off)
-                Color labelColor = IsOn
-                    ? Game1.textColor
-                    : new Color(150, 140, 125);
-
-                Utility.drawTextWithShadow(b, Label, Game1.dialogueFont,
-                    new Vector2(labelX, labelY), labelColor);
+                Utility.drawTextWithShadow(b, Label, Game1.dialogueFont, textPos, Game1.textColor);
             }
-            catch { /* ignore render errors on individual component */ }
+            catch { /* игнорируем ошибки отрисовки отдельного компонента */ }
         }
-    }
-
-    /// <summary>
-    /// A row in the NPC list: colored indicator dot + bold name + gray location/time.
-    /// The entire row is clickable.
-    /// </summary>
-    internal class NpcRow
-    {
-        public Rectangle Bounds { get; }
-        public string Name { get; }
-        public string Location { get; }
-        public int Time { get; }
-        public NpcStatus Status { get; }
-        public bool IsSelected { get; set; }
-
-        public NpcRow(Rectangle bounds, string name, string location, int time, NpcStatus status, bool selected)
-        {
-            Bounds = bounds;
-            Name = name;
-            Location = location;
-            Time = time;
-            Status = status;
-            IsSelected = selected;
-        }
-
-        public bool ContainsPoint(int x, int y) => Bounds.Contains(x, y);
     }
 
     /// <summary>
@@ -133,66 +62,5 @@ namespace NpcTrackerMod.UI
         Leaving,
         Unavailable,
         Offline
-    }
-
-    /// <summary>
-    /// SDV-style radio button with circular indicator.
-    /// </summary>
-    internal class SDVRadioButton
-    {
-        public Rectangle Bounds { get; }
-        public string Label { get; }
-        public string Tooltip { get; set; }
-        public bool IsSelected { get; set; }
-        public Action OnSelect { get; }
-
-        private const int CIRCLE_SIZE = 16;
-
-        public SDVRadioButton(Rectangle bounds, string label, bool selected, Action onSelect, string tooltip = null)
-        {
-            Bounds = bounds;
-            Label = label;
-            Tooltip = tooltip;
-            IsSelected = selected;
-            OnSelect = onSelect;
-        }
-
-        public SDVRadioButton() { }
-
-        public bool ContainsPoint(int x, int y) => Bounds.Contains(x, y);
-
-        public void Draw(SpriteBatch b)
-        {
-            try
-            {
-                // Radio circle position: centered vertically, left side
-                int circleX = Bounds.X;
-                int circleY = Bounds.Y + (Bounds.Height - CIRCLE_SIZE) / 2;
-
-                // Outer circle (dark)
-                b.Draw(Game1.staminaRect,
-                    new Rectangle(circleX, circleY, CIRCLE_SIZE, CIRCLE_SIZE),
-                    new Color(90, 80, 65));
-
-                // Inner fill when selected (golden)
-                if (IsSelected)
-                {
-                    int inset = 3;
-                    b.Draw(Game1.staminaRect,
-                        new Rectangle(circleX + inset, circleY + inset,
-                            CIRCLE_SIZE - inset * 2, CIRCLE_SIZE - inset * 2),
-                        new Color(255, 210, 60));
-                }
-
-                // Label
-                float labelX = circleX + CIRCLE_SIZE + 8;
-                float labelY = Bounds.Y + (Bounds.Height - Game1.smallFont.MeasureString(Label).Y) / 2f;
-                Color labelColor = IsSelected ? Game1.textColor : new Color(140, 130, 115);
-
-                Utility.drawTextWithShadow(b, Label, Game1.smallFont,
-                    new Vector2(labelX, labelY), labelColor);
-            }
-            catch { }
-        }
     }
 }
