@@ -41,7 +41,13 @@ namespace NpcTrackerMod.Scheduling
         public void BuildDayRoutes(NPC npc)
         {
             if (npc.Schedule?.Any() != true)
+            {
+                // Для кастомных NPC расписание может быть ещё не загружено
+                // (Content Patcher применяет патчи после DayStarted).
+                // Пробуем построить из rawData — тот же источник, что и BuildGlobalRoute.
+                BuildDayRoutesFromRawData(npc);
                 return;
+            }
 
             var totalPath = new Dictionary<string, HashSet<TilePoint>>();
             var timedPath = new Dictionary<int, Dictionary<string, HashSet<TilePoint>>>();
@@ -79,6 +85,115 @@ namespace NpcTrackerMod.Scheduling
             PopulateVariantKeys(npc);
 
             _store.AddPath(npc, _store.DayPaths, totalPath);
+        }
+
+        /// <summary>
+        /// Строит дневной маршрут из rawData для NPC, у которых npc.Schedule пуст.
+        /// Используется как фолбэк для кастомных NPC (SVE, SpaceCore и т.д.),
+        /// чьё расписание загружается Content Patcher после DayStarted.
+        /// </summary>
+        private void BuildDayRoutesFromRawData(NPC npc)
+        {
+            if (npc == null) return;
+
+            var rawData = npc.getMasterScheduleRawData();
+            if (rawData == null || rawData.Count == 0)
+                return;
+
+            var schedule = BuildMasterSchedule(npc, null, null);
+            if (schedule.Count == 0) return;
+
+            var totalPath = new Dictionary<string, HashSet<TilePoint>>();
+            var timedPath = new Dictionary<int, Dictionary<string, HashSet<TilePoint>>>();
+            string lastLocationName = null;
+
+            foreach (var kvp in schedule)
+            {
+                if (!ScheduleEntryParser.IsValid(kvp.Key, kvp.Value)) continue;
+
+                if (!int.TryParse(kvp.Key, out int timeInt)) continue;
+
+                try
+                {
+                    var slots = kvp.Value.Split('/');
+                    string lastLocation = npc.currentLocation?.Name;
+                    int npcX = npc.TilePoint.X;
+                    int npcY = npc.TilePoint.Y;
+
+                    foreach (var slot in slots)
+                    {
+                        if (ScheduleEntryParser.ShouldSkip(slot)) continue;
+                        var parts = slot.Split(' ');
+
+                        if (parts.Length == 2 && parts[1] == "bed")
+                        {
+                            string homeMap = npc.DefaultMap;
+                            if (!string.IsNullOrEmpty(homeMap))
+                            {
+                                var homeLoc = Game1.getLocationFromName(homeMap);
+                                int bedX = homeLoc?.warps?.Count > 0 ? homeLoc.warps[0].X : 1;
+                                int bedY = homeLoc?.warps?.Count > 0 ? homeLoc.warps[0].Y : 1;
+                                var pathDesc = npc.pathfindToNextScheduleLocation(
+                                    parts[0], lastLocation, npcX, npcY,
+                                    homeMap, bedX, bedY, 2, null, null);
+                                if (pathDesc?.route != null)
+                                {
+                                    var seg = FilterRouteByLocation(
+                                        npc.currentLocation?.Name, pathDesc.route, ref lastLocationName);
+                                    NpcPathStore.MergeSegments(totalPath, seg);
+                                    if (seg.Count > 0 && !timedPath.ContainsKey(timeInt))
+                                        timedPath[timeInt] = seg;
+                                }
+                                lastLocation = homeMap;
+                                npcX = bedX;
+                                npcY = bedY;
+                            }
+                            continue;
+                        }
+
+                        if (parts.Length <= 2) continue;
+
+                        ScheduleEntryParser.Parse(parts, lastLocationName,
+                            out string time, out string locationName,
+                            out int x, out int y,
+                            out int facingDir, out string endBehavior, out string endMessage);
+
+                        if (IsAnimationLocation(locationName)) continue;
+
+                        var pd = npc.pathfindToNextScheduleLocation(
+                            time, lastLocation, npcX, npcY,
+                            locationName, x, y, facingDir, endBehavior, endMessage);
+
+                        if (pd?.route != null)
+                        {
+                            var seg = FilterRouteByLocation(
+                                npc.currentLocation?.Name, pd.route, ref lastLocationName);
+                            NpcPathStore.MergeSegments(totalPath, seg);
+                            if (seg.Count > 0 && !timedPath.ContainsKey(timeInt))
+                                timedPath[timeInt] = seg;
+                        }
+                        lastLocation = locationName;
+                        npcX = x;
+                        npcY = y;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _monitor.Log($"[DayRoutesFromRaw] {npc.Name} @ {kvp.Key}: {ex.Message}", LogLevel.Debug);
+                }
+            }
+
+            if (totalPath.Count == 0) return;
+
+            _registry.TotalNpcList.Add(npc.Name);
+            _store.TimedDayPaths[npc.Name] = timedPath;
+            _store.AddPath(npc, _store.DayPaths, totalPath);
+
+            string activeKey = ScheduleVariantResolver.GetActiveKey(npc, _monitor);
+            if (!string.IsNullOrEmpty(activeKey))
+                _store.ActiveScheduleKeys[npc.Name] = activeKey;
+
+            PopulateVariantKeys(npc);
         }
 
         /// <summary>
