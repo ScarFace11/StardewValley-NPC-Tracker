@@ -24,6 +24,18 @@ namespace NpcTrackerMod.Scheduling
         }
 
         /// <summary>
+        /// Возвращает активный ключ из переданного набора ключей.
+        /// Используется для кастомных NPC, у которых getMasterScheduleRawData() пуст
+        /// (расписания загружены из JSON-файлов модов, а не через игровой API).
+        /// </summary>
+        public static string GetActiveKeyFromKeys(NPC npc, IMonitor monitor, IEnumerable<string> availableKeys)
+        {
+            var keySet = new HashSet<string>(availableKeys);
+            if (keySet.Count == 0) return null;
+            return GetActiveKeyCore(npc, monitor, keySet.ToDictionary(k => k, _ => string.Empty));
+        }
+
+        /// <summary>
         /// Возвращает только одну запись словаря, соответствующую активному ключу.
         /// Если ключ не найден — возвращает всю коллекцию (поведение как раньше).
         /// getMasterScheduleRawData() вызывается ровно один раз.
