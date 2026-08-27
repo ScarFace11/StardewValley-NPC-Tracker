@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
 using NpcTrackerMod.Tracking;
 using StardewModdingAPI;
+using StardewValley;
 
 namespace NpcTrackerMod.Scheduling
 {
@@ -118,7 +119,11 @@ namespace NpcTrackerMod.Scheduling
                 foreach (var scheduleEntry in npcEntry.Value)
                 {
                     foreach (var path in scheduleEntry.Value)
+                    {
                         _processor.BuildGlobalRoute(null, actualName, path, scheduleEntry.Key);
+                        _processor.BuildTimedRoute(
+                            FindNpc(actualName), scheduleEntry.Key, path);
+                    }
                 }
             }
         }
@@ -316,6 +321,12 @@ namespace NpcTrackerMod.Scheduling
                     ?? string.Empty;
             }
             catch { return string.Empty; }
+        }
+
+        private NPC FindNpc(string name)
+        {
+            return _registry.GameNpcs?.FirstOrDefault(
+                n => string.Equals(n.Name, name, StringComparison.OrdinalIgnoreCase));
         }
 
         private static bool ContainsI18nTokens(JToken token)

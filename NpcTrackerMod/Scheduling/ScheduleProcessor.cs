@@ -13,7 +13,7 @@ namespace NpcTrackerMod.Scheduling
     /// <summary>
     /// Строит маршруты NPC из расписаний игры и кастомных модов.
     /// </summary>
-    public class ScheduleProcessor
+    public partial class ScheduleProcessor
     {
         private readonly IMonitor _monitor;
         private readonly NpcPathStore _store;
