@@ -98,7 +98,35 @@ namespace NpcTrackerMod.Scheduling
             if (customPath == null && npc.Schedule?.Any() != true)
                 return;
 
-            var masterSchedule = BuildMasterSchedule(npc, customPath, customPathKey);
+            // Для глобального маршрута берём ВСЕ записи из rawData,
+            // а не только активный вариант — чтобы показать полный набор
+            // всех возможных маршрутов (дождь, брак, сезон, день недели и т.д.).
+            Dictionary<string, string> masterSchedule;
+            if (customPath != null)
+            {
+                masterSchedule = new Dictionary<string, string> { [customPathKey] = customPath };
+            }
+            else
+            {
+                var rawData = npc.getMasterScheduleRawData();
+                if (rawData == null || rawData.Count == 0)
+                    return;
+                masterSchedule = new Dictionary<string, string>(rawData.Count);
+                foreach (var kvp in rawData)
+                {
+                    string val = kvp.Value;
+                    int redirects = 0;
+                    while (val != null && val.StartsWith("GOTO ") && redirects < 10)
+                    {
+                        string tgt = val.Substring(5).Trim();
+                        if (!rawData.TryGetValue(tgt, out val))
+                            val = null;
+                        redirects++;
+                    }
+                    if (!string.IsNullOrEmpty(val) && !val.StartsWith("GOTO "))
+                        masterSchedule[kvp.Key] = val;
+                }
+            }
             _registry.TotalNpcList.Add(npc.Name);
 
             var totalPath = new Dictionary<string, HashSet<TilePoint>>();

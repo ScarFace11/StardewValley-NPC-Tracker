@@ -115,11 +115,6 @@ namespace NpcTrackerMod.Rendering
             {
                 if (!_state.SwitchGetNpcPath || npc == null) return;
 
-                // Не рисуем маршрут NPC, если он находится в другой локации.
-                // Координаты тайлов другой карты некорректны на текущей карте
-                // (особенно внутри зданий — тайлы Town/Farm/Forest = мусор).
-                if (Game1.currentLocation != npc.currentLocation) return;
-
                 // Пошаговый режим перехватывает управление до стандартной логики.
                 // Работает только для дневного маршрута (TimedDayPaths / VariantTimedPaths).
                 if (_state.RouteStepMode && !_state.SwitchGlobalNpcPath)
@@ -176,11 +171,14 @@ namespace NpcTrackerMod.Rendering
 
                 var routeColor = RouteColor;
 
-                // Фильтруем по локации NPC — покажем маршрут только на той карте,
-                // где NPC реально находится. Иначе тайлы с координатами другой
-                // карты окажутся мусором на текущей карте (внутри зданий).
-                string npcLoc = npc.currentLocation?.Name ?? string.Empty;
-                if (pathData.TryGetValue(npcLoc, out var tileSet))
+                // Определяем локацию для отрисовки тайлов:
+                // • «Все локации» / «Глобальный маршрут» — рисуем на ТЕКУЩЕЙ карте игрока,
+                //   беря тайлы маршрута NPC для этой локации. Тайлы из других локаций
+                //   имели бы неверные координаты на текущей карте.
+                // • Обычный режим — рисуем в текущей локации (NPC отфильтрованы
+                //   кешем NpcTracker, в кеше только NPC текущей локации).
+                string drawLocation = Game1.currentLocation?.Name ?? string.Empty;
+                if (pathData.TryGetValue(drawLocation, out var tileSet))
                 {
                     foreach (var coord in tileSet)
                     {
