@@ -58,11 +58,8 @@ namespace NpcTrackerMod.Scheduling
             {
                 if (entry.Tile == position)
                     return entry.Target;
-            }
-
-            _monitor.Log(
-                $"Варп не найден: {fromLocation} @ {position}",
-                LogLevel.Debug);
+            }                // Не логируем: отсутствие варпа — нормальная ситуация
+                // (разрыв смежности не означает переход между локациями).
 
             return null;
         }
