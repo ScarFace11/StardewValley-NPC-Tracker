@@ -116,26 +116,19 @@ namespace NpcTrackerMod.Scheduling
                     NpcModNames[actualName] = modName;
                 }
 
-                // Собираем все ключи расписания для этого NPC.
-                var scheduleKeys = npcEntry.Value.Keys.ToList();
-                string activeKey = ScheduleVariantResolver.GetActiveKeyFromKeys(
-                    FindNpc(actualName), _monitor, scheduleKeys);
-
+                // Регистрируем все расписания в процессоре — источник для дневного
+                // маршрута и вариантов пошагового режима (getMasterScheduleRawData()
+                // у модовых NPC пуст). Дневные пути и варианты строит BuildDayRoutes
+                // каждый день; здесь — только глобальные пути (один раз за сессию).
                 foreach (var scheduleEntry in npcEntry.Value)
                 {
                     foreach (var path in scheduleEntry.Value)
                     {
+                        _processor.RegisterCustomSchedule(
+                            actualName, scheduleEntry.Key, path);
+
                         // Глобальный маршрут — из ВСЕХ ключей (для «Глобальный маршрут»).
                         _processor.BuildGlobalRoute(null, actualName, path, scheduleEntry.Key);
-
-                        // Таймовый маршрут — только для активного ключа сегодня
-                        // (как у ванильных NPC: npc.Schedule содержит только сегодняшнее).
-                        if (string.Equals(scheduleEntry.Key, activeKey,
-                            StringComparison.OrdinalIgnoreCase))
-                        {
-                            _processor.BuildTimedRoute(
-                                FindNpc(actualName), scheduleEntry.Key, path);
-                        }
                     }
                 }
             }

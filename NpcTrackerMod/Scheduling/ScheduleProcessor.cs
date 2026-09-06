@@ -20,6 +20,15 @@ namespace NpcTrackerMod.Scheduling
         private readonly NpcRegistry _registry;
         private readonly LocationMapper _mapper;
 
+        /// <summary>
+        /// Кастомные расписания из JSON-файлов модов: NPC → ключ → список строк маршрутов.
+        /// Регистрируются CustomScheduleLoader.TransferToProcessor через RegisterCustomSchedule.
+        /// Используется как источник для вариантов пошагового режима у модовых NPC,
+        /// у которых getMasterScheduleRawData() пуст.
+        /// </summary>
+        private readonly Dictionary<string, Dictionary<string, List<string>>> _customSchedules
+            = new Dictionary<string, Dictionary<string, List<string>>>();
+
         public ScheduleProcessor(
             IMonitor monitor,
             NpcPathStore store,
@@ -43,9 +52,19 @@ namespace NpcTrackerMod.Scheduling
             if (npc.Schedule?.Any() != true)
             {
                 // Для кастомных NPC расписание может быть ещё не загружено
-                // (Content Patcher применяет патчи после DayStarted).
-                // Пробуем построить из rawData — тот же источник, что и BuildGlobalRoute.
-                BuildDayRoutesFromRawData(npc);
+                // (Content Patcher применяет патчи после DayStarted),
+                // а getMasterScheduleRawData() у них пуст.
+                // Дневной маршрут строим из зарегистрированных расписаний модов;
+                // если их нет — пробуем rawData (тот же источник, что и BuildGlobalRoute).
+                if (_customSchedules.TryGetValue(npc.Name, out var custom)
+                    && custom.Count > 0)
+                {
+                    BuildDayRoutesFromCustom(npc, custom);
+                }
+                else
+                {
+                    BuildDayRoutesFromRawData(npc);
+                }
                 return;
             }
 
@@ -85,6 +104,37 @@ namespace NpcTrackerMod.Scheduling
             PopulateVariantKeys(npc);
 
             _store.AddPath(npc, _store.DayPaths, totalPath);
+        }
+
+        /// <summary>
+        /// Строит дневной маршрут кастомного NPC (SVE, SpaceCore и т.д.)
+        /// из зарегистрированных расписаний модов. Вызывается каждый день —
+        /// как BuildDayRoutes для ванильных NPC.
+        /// Тайминговые пути строятся только для активного ключа сегодня;
+        /// остальные ключи доступны как варианты в пошаговом режиме.
+        /// </summary>
+        private void BuildDayRoutesFromCustom(NPC npc, Dictionary<string, List<string>> custom)
+        {
+            var keys = new List<string>(custom.Keys);
+            string activeKey = ScheduleVariantResolver.GetActiveKeyFromKeys(npc, _monitor, keys);
+
+            // Тайминговые пути — только активный ключ сегодня (как npc.Schedule у ванильных).
+            if (!string.IsNullOrEmpty(activeKey)
+                && custom.TryGetValue(activeKey, out var activePaths)
+                && activePaths != null)
+            {
+                foreach (var path in activePaths)
+                    BuildTimedRoute(npc, activeKey, path);
+            }
+
+            // Ключи вариантов для чипов пошагового режима.
+            keys.Sort(StringComparer.OrdinalIgnoreCase);
+            _registry.NpcVariantKeys[npc.Name] = keys;
+
+            // Активный ключ для навигатора пошагового режима.
+            // BuildTimedRoute не может его вычислить: rawData у модовых NPC пуст.
+            if (!string.IsNullOrEmpty(activeKey))
+                _store.ActiveScheduleKeys[npc.Name] = activeKey;
         }
 
         /// <summary>
@@ -286,18 +336,43 @@ namespace NpcTrackerMod.Scheduling
         }
 
         /// <summary>
+        /// Регистрирует кастомное расписание NPC из JSON-файла мода.
+        /// Вызывается CustomScheduleLoader для каждого ключа каждого кастомного NPC.
+        /// </summary>
+        public void RegisterCustomSchedule(string npcName, string key, string rawValue)
+        {
+            if (string.IsNullOrEmpty(npcName) || string.IsNullOrEmpty(key)) return;
+
+            if (!_customSchedules.TryGetValue(npcName, out var dict))
+            {
+                dict = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+                _customSchedules[npcName] = dict;
+            }
+
+            if (!dict.TryGetValue(key, out var list))
+            {
+                list = new List<string>();
+                dict[key] = list;
+            }
+            list.Add(rawValue);
+        }
+
+        /// <summary>
         /// Строит тайминговые пути для конкретного варианта расписания NPC.
         /// Результат сохраняется в VariantTimedPaths для использования в пошаговом режиме.
         /// Вызывается по запросу из ModEntry при выборе пользователем варианта.
+        /// Для кастомных NPC, у которых rawData пуст, использует зарегистрированные расписания модов.
         /// </summary>
         public void BuildVariantTimedRoute(NPC npc, string variantKey)
         {
             if (npc == null || string.IsNullOrEmpty(variantKey)) return;
 
+            // Источник: сначала игровой rawData (ванильные NPC),
+            // затем зарегистрированные кастомные расписания (моды).
             var rawData = npc.getMasterScheduleRawData();
-            if (rawData == null || !rawData.TryGetValue(variantKey, out string rawValue))
+            if (!TryGetVariantValue(npc.Name, variantKey, rawData, out string rawValue))
             {
-                _monitor.Log($"[VariantRoute] {npc.Name}: ключ '{variantKey}' не найден в rawData.", LogLevel.Warn);
+                _monitor.Log($"[VariantRoute] {npc.Name}: ключ '{variantKey}' не найден.", LogLevel.Warn);
                 return;
             }
 
@@ -307,7 +382,7 @@ namespace NpcTrackerMod.Scheduling
             while (value != null && value.StartsWith("GOTO ") && redirects < 10)
             {
                 string targetKey = value.Substring(5).Trim();
-                if (!rawData.TryGetValue(targetKey, out value))
+                if (!TryGetVariantValue(npc.Name, targetKey, rawData, out value))
                 {
                     _monitor.Log($"[VariantRoute] {npc.Name}: GOTO цель '{targetKey}' не найдена.", LogLevel.Warn);
                     return;
@@ -404,6 +479,28 @@ namespace NpcTrackerMod.Scheduling
             _monitor.Log(
                 $"[VariantRoute] {npc.Name}: вариант '{variantKey}' построен, {timedPath.Count} шагов.",
                 LogLevel.Debug);
+        }
+
+        /// <summary>
+        /// Ищет сырое значение варианта: сначала в игровом rawData, затем в кастомных расписаниях.
+        /// </summary>
+        private bool TryGetVariantValue(
+            string npcName, string key,
+            Dictionary<string, string> rawData, out string value)
+        {
+            if (rawData != null && rawData.TryGetValue(key, out value))
+                return true;
+
+            if (_customSchedules.TryGetValue(npcName, out var dict)
+                && dict.TryGetValue(key, out var list)
+                && list != null && list.Count > 0)
+            {
+                value = list[list.Count - 1]; // последний зарегистрированный патч
+                return true;
+            }
+
+            value = null;
+            return false;
         }
 
         // ── Внутренняя обработка ─────────────────────────────────────────────────
@@ -601,13 +698,27 @@ namespace NpcTrackerMod.Scheduling
 
         /// <summary>
         /// Заполняет NpcVariantKeys для данного NPC списком всех ключей его сырого расписания.
+        /// Для кастомных NPC, у которых getMasterScheduleRawData() пуст,
+        /// использует зарегистрированные расписания модов.
         /// </summary>
         private void PopulateVariantKeys(NPC npc)
         {
             var rawData = npc.getMasterScheduleRawData();
-            if (rawData == null || rawData.Count == 0) return;
 
-            var keys = new List<string>(rawData.Keys);
+            List<string> keys;
+            if (rawData != null && rawData.Count > 0)
+            {
+                keys = new List<string>(rawData.Keys);
+            }
+            else if (_customSchedules.TryGetValue(npc.Name, out var custom))
+            {
+                keys = new List<string>(custom.Keys);
+            }
+            else
+            {
+                return;
+            }
+
             keys.Sort(StringComparer.OrdinalIgnoreCase);
             _registry.NpcVariantKeys[npc.Name] = keys;
         }

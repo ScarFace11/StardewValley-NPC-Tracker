@@ -12,7 +12,7 @@ obj/
 .cache/
 .replit
 .replit.md
-REPLIT_AI_INSTRUCTIONS.md
+AI_INSTRUCTIONS.md
 replit.nix
 zipFile.zip
 attached_assets/
@@ -20,3 +20,4 @@ attached_assets/
 NpcTrackerMod-Obsidian.md
 
 .freebuff
+ARCHITECTURE.md

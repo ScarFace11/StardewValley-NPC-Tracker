@@ -266,6 +266,9 @@ namespace NpcTrackerMod.UI
 
                 // Разделитель
                 int divY = BY + HEADER_H;
+                b.Draw(Game1.staminaRect,
+                    new Rectangle(BX + PAD, divY, BOX_W - PAD * 2, 2),
+                    new Color(180, 160, 120, 150));
 
                 if (_npcData.Count == 0)
                 {
@@ -499,9 +502,13 @@ namespace NpcTrackerMod.UI
                     Game1.smallFont, new Vector2(px, py + 66), Color.Gray);
             }
 
+            // ── Разделитель и расписание в 2 колонки (с затемнением по фильтру времени) ──
             int dividerY = py + 92;
+            b.Draw(Game1.staminaRect,
+                new Rectangle(px, dividerY, panel.Right - 14 - px, 2),
+                new Color(180, 155, 110, 150));
 
-            if (data.Schedule?.Count > 0)
+            if (data.Schedule.Count > 0)
             {
                 int maxCols = 2;
                 int maxRows = 2;
